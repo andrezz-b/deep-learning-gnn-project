@@ -7,7 +7,9 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.datasets import QM9
 from torch_geometric.transforms import BaseTransform
+
 from qm9_utils import DataLoader, GetTarget
+
 
 class QM9DataModule(pl.LightningDataModule):
     def __init__(

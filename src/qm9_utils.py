@@ -10,11 +10,12 @@ from typing import Any
 
 import torch.utils.data
 from torch.utils.data.dataloader import default_collate
-from torch_geometric.data import Batch, Dataset, Data
+from torch_geometric.data import Batch, Data, Dataset
 from torch_geometric.data.data import BaseData
 from torch_geometric.data.datapipes import DatasetAdapter
-from torch_geometric.typing import TensorFrame, torch_frame
 from torch_geometric.transforms import BaseTransform
+from torch_geometric.typing import TensorFrame, torch_frame
+
 
 class GetTarget(BaseTransform):
     def __init__(self, target: int | None = None) -> None:

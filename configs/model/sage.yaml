@@ -1,0 +1,9 @@
+defaults:
+  - _self_
+
+name: sage
+
+init:
+  _target_: models.GraphSAGE
+  _partial_: false
+  num_node_features: 11
