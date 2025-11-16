@@ -7,3 +7,8 @@ init:
   _target_: models.GraphSAGE
   _partial_: false
   num_node_features: 11
+  hidden_channels: 256
+  local_layers: 3
+  dropout: 0.0
+  norm: batch
+

@@ -1,0 +1,14 @@
+defaults:
+  - _self_
+
+name: gatv2
+
+init:
+  _target_: models.GATv2
+  _partial_: false
+  num_node_features: 11
+  hidden_channels: 64
+  heads: 4
+  local_layers: 2
+  dropout: 0.5
+  norm: null
