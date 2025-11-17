@@ -6,6 +6,7 @@ name: gcn
 init:
   _target_: models.GCN
   _partial_: false
+  res: false
   num_node_features: 11
   local_layers: 3
   hidden_channels: 512

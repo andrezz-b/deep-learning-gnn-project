@@ -11,4 +11,5 @@ init:
   local_layers: 3
   dropout: 0.0
   norm: batch
+  res: true
 

@@ -12,3 +12,4 @@ init:
   local_layers: 2
   dropout: 0.5
   norm: null
+  res: false

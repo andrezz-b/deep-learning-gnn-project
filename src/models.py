@@ -15,7 +15,8 @@ class GCN(torch.nn.Module):
         hidden_channels: int = 64,
         local_layers: int = 3,
         dropout: float = 0.5,
-        norm: Literal["batch", "layer"] | None = None
+        norm: Literal["batch", "layer"] | None = None,
+        res: bool = False,
     ):
         super(GCN, self).__init__()
         self.dropout: float = dropout
@@ -23,6 +24,12 @@ class GCN(torch.nn.Module):
         convs = [GCNConv(num_node_features, hidden_channels)]
         convs += [GCNConv(hidden_channels, hidden_channels) for _ in range(local_layers - 1)]
         self.local_convs: ModuleList = torch.nn.ModuleList(convs)
+
+        # Residual linear projections (map input dim to conv output dim)
+        self.res = res
+        res_linears = [torch.nn.Linear(num_node_features, hidden_channels)]
+        res_linears += [torch.nn.Linear(hidden_channels, hidden_channels) for _ in range(local_layers - 1)]
+        self.res_linears: ModuleList = torch.nn.ModuleList(res_linears)
 
         def _make_norm_layer(norm_type: str | None, channels: int) -> torch.nn.Module | None:
             if norm_type == "batch":
@@ -45,7 +52,10 @@ class GCN(torch.nn.Module):
 
         # 1. Obtain node embeddings
         for i, local_conv in enumerate(self.local_convs):
-            x = local_conv(x, edge_index)
+            if self.res:
+                x = local_conv(x, edge_index) + self.res_linears[i](x)
+            else:
+                x = local_conv(x, edge_index)
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = self.norm_layers[i](x)
 
@@ -62,13 +72,19 @@ class GCN(torch.nn.Module):
 
 
 class GraphSAGE(torch.nn.Module):
-    def __init__(self, num_node_features: int, hidden_channels: int = 64, local_layers: int = 2, dropout: float = 0.5, norm: Literal["batch", "layer"] | None = None):
+    def __init__(self, num_node_features: int, hidden_channels: int = 64, local_layers: int = 2, dropout: float = 0.5, norm: Literal["batch", "layer"] | None = None, res: bool = False):
         super(GraphSAGE, self).__init__()
         self.dropout = dropout
 
         convs = [SAGEConv(num_node_features, hidden_channels)]
         convs += [SAGEConv(hidden_channels, hidden_channels) for _ in range(local_layers - 1)]
         self.local_convs: ModuleList = torch.nn.ModuleList(convs)
+
+        # Residual linears for SAGE
+        self.res = res
+        res_linears = [torch.nn.Linear(num_node_features, hidden_channels)]
+        res_linears += [torch.nn.Linear(hidden_channels, hidden_channels) for _ in range(local_layers - 1)]
+        self.res_linears: ModuleList = torch.nn.ModuleList(res_linears)
 
         def _make_norm_layer(norm_type: str | None, channels: int) -> torch.nn.Module | None:
             if norm_type == "batch":
@@ -86,7 +102,10 @@ class GraphSAGE(torch.nn.Module):
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
         for i, conv in enumerate(self.local_convs):
-            x = conv(x, edge_index)
+            if self.res:
+                x = conv(x, edge_index) + self.res_linears[i](x)
+            else:
+                x = conv(x, edge_index)
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = self.norm_layers[i](x)
             if i < len(self.local_convs) - 1:
@@ -99,7 +118,7 @@ class GraphSAGE(torch.nn.Module):
 
 class GATv2(torch.nn.Module):
     def __init__(
-        self, num_node_features: int, hidden_channels: int = 64, heads: int = 4, local_layers: int = 2, dropout: float = 0.5, norm: Literal["batch", "layer"] | None = None
+        self, num_node_features: int, hidden_channels: int = 64, heads: int = 4, local_layers: int = 2, dropout: float = 0.5, norm: Literal["batch", "layer"] | None = None, res: bool = False
     ):
         super(GATv2, self).__init__()
 
@@ -110,6 +129,19 @@ class GATv2(torch.nn.Module):
         self.local_convs: ModuleList = torch.nn.ModuleList(convs)
 
         self.dropout = dropout
+
+        # Residual linears for GATv2: sizes depend on heads and layer position
+        self.res = res
+        res_linears = []
+        prev_dim = num_node_features
+        for i in range(local_layers):
+            if i == 0:
+                out_dim = hidden_channels * heads
+            else:
+                out_dim = hidden_channels
+            res_linears.append(torch.nn.Linear(prev_dim, out_dim))
+            prev_dim = out_dim
+        self.res_linears: ModuleList = torch.nn.ModuleList(res_linears)
 
         def _make_norm_layer(norm_type: str | None, channels: int) -> torch.nn.Module | None:
             if norm_type == "batch":
@@ -127,7 +159,10 @@ class GATv2(torch.nn.Module):
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
         for i, conv in enumerate(self.local_convs):
-            x = conv(x, edge_index)
+            if self.res:
+                x = conv(x, edge_index) + self.res_linears[i](x)
+            else:
+                x = conv(x, edge_index)
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = self.norm_layers[i](x)
             if i < len(self.local_convs) - 1:
