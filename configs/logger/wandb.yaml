@@ -3,7 +3,8 @@ defaults:
 
 _target_: logger.WandBLogger
 group: ${dataset.dataset_name} # Name of the group for wandb
-name: ${model.name}_seed=${seed} # Name of the run for wandb
+#name: ${model.name}_seed=${seed} # Name of the run for wandb regular run
+name: ${model.name}_lr=${trainer.init.optimizer.lr}_wd=${trainer.init.optimizer.weight_decay}_seed=${seed}  #run name with hyperparams for gridsearch
 job_type: test
 entity: andrezzb-deep-learning-gnn
 project_name: deep-learning-gnn

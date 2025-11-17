@@ -119,3 +119,6 @@ dmypy.json
 data/
 logs/
 outputs/
+
+# virtual env
+venv/
