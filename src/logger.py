@@ -49,6 +49,7 @@ class WandBLogger:
                 dir=self.dir,
                 entity=self.entity,
                 job_type=self.job_type,
+                reinit=True,
             )
 
     @property
