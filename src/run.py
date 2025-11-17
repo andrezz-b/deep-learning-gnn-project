@@ -38,7 +38,7 @@ def main(cfg):
 
     results = trainer.train(**cfg.trainer.train)
 #    results = torch.Tensor(results)
-    #end run so gridsearch doesnt commit forever stop
+    #end run so gridsearch doesnt  log all runs to seperate instances in weight and biases instead of a single one
     logger.end_run()
 
 
