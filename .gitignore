@@ -122,3 +122,6 @@ outputs/
 
 # virtual env
 venv/
+
+# multirun
+src/multirun/
