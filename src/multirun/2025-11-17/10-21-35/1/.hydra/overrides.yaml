@@ -1,4 +1,0 @@
-- trainer.init.optimizer.lr=0.0005
-- trainer.init.optimizer.weight_decay=0.0005
-- trainer.init.scheduler.gamma=1.0
-- trainer.init.scheduler.step_size=10
