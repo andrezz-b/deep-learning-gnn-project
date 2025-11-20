@@ -1,0 +1,41 @@
+program: src/run.py
+method: grid
+parameters:
+  trainer.train.total_epochs:
+    values: [1000]
+    distribution: categorical
+  trainer.init.scheduler.step_size:
+    values: [10]
+    distribution: categorical
+  trainer.init.scheduler.gamma:
+    values: [0.99]
+    distribution: categorical
+  trainer.init.optimizer.weight_decay:
+    values: [0.005]
+    distribution: categorical
+  trainer.init.optimizer.lr:
+    values: [1e-3, 3e-4]
+    distribution: categorical
+  model.name:
+    values: [sage]
+    distribution: categorical
+  model.init.hidden_channels:
+    values: [512]
+    distribution: categorical
+  model.init.local_layers:
+    values: [7]
+    distribution: categorical
+  model.init.dropout:
+    values: [0.1, 0.3, 0.5]
+    distribution: categorical
+  model.init.norm:
+    values: [batch]
+    distribution: categorical
+  model.init.res:
+    values: [true]
+    distribution: categorical
+
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

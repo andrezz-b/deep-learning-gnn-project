@@ -7,3 +7,9 @@ init:
   _target_: models.GATv2
   _partial_: false
   num_node_features: 11
+  hidden_channels: 256
+  heads: 1
+  local_layers: 3
+  dropout: 0.0
+  norm: batch
+  res: true
