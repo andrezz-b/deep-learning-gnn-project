@@ -2,7 +2,7 @@ program: src/run.py
 method: grid
 parameters:
   trainer.train.total_epochs:
-    values: [1000]
+    values: [500]
     distribution: categorical
   trainer.init.scheduler.step_size:
     values: [10]
@@ -14,25 +14,28 @@ parameters:
     values: [0.005]
     distribution: categorical
   trainer.init.optimizer.lr:
-    values: [1e-3, 3e-4]
+    values: [3e-4]
     distribution: categorical
   model.name:
-    values: [sage]
+    values: [gin, gat, gcn]
     distribution: categorical
   model.init.hidden_channels:
-    values: [512]
+    values: [128, 256, 512]
     distribution: categorical
   model.init.local_layers:
-    values: [7]
+    values: [3, 5, 7]
     distribution: categorical
   model.init.dropout:
-    values: [0.1, 0.3, 0.5]
+    values: [0.1]
     distribution: categorical
   model.init.norm:
     values: [batch]
     distribution: categorical
   model.init.res:
     values: [true]
+    distribution: categorical
+  model.init.jk:
+    values: [max, null]
     distribution: categorical
 
 command:

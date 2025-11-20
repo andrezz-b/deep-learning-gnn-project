@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Literal
 
 import torch
 import torch.nn.functional as F
@@ -8,6 +8,8 @@ from torch_geometric.nn import (
     BatchNorm,
     GATv2Conv,
     GCNConv,
+    GINConv,
+    JumpingKnowledge,
     LayerNorm,
     SAGEConv,
     global_mean_pool,
@@ -30,6 +32,7 @@ class GCN(torch.nn.Module):
         local_layers: int = 3,
         dropout: float = 0.5,
         norm: Literal["batch", "layer"] | None = None,
+        jk: Literal["max", "cat", "lstm"] | None = None,
         res: bool = False,
     ):
         super(GCN, self).__init__()
@@ -59,29 +62,40 @@ class GCN(torch.nn.Module):
             [nl if nl is not None else torch.nn.Identity() for nl in norm_layers]
         )
 
-        self.linear = torch.nn.Linear(hidden_channels, 1)
+        self.jk_mode = jk
+        if jk is not None:
+            self.jk = JumpingKnowledge(jk, hidden_channels, local_layers)
+            jk_channels = (
+                hidden_channels * local_layers if jk == "cat" else hidden_channels
+            )
+        else:
+            self.jk = None
+            jk_channels = hidden_channels
 
-    def forward(self, data: Any) -> torch.Tensor:
+        self.linear = torch.nn.Linear(jk_channels, 1)
+
+    def forward(self, data):
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
-        # 1. Obtain node embeddings
-        for i, local_conv in enumerate(self.local_convs):
+        jk_inputs: list[torch.Tensor] = []
+        for i, conv in enumerate(self.local_convs):
             if self.res:
-                x = local_conv(x, edge_index) + self.res_linears[i](x)
+                x = conv(x, edge_index) + self.res_linears[i](x)
             else:
-                x = local_conv(x, edge_index)
-            x = self.norm_layers[i](x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
+                x = conv(x, edge_index)
 
-            if i < len(self.local_convs) - 1:
+            if i < len(self.local_convs) - 1 or self.jk is not None:
+                x = self.norm_layers[i](x)
                 x = F.relu(x)
+                x = F.dropout(x, p=self.dropout, training=self.training)
+                if self.jk is not None:
+                    jk_inputs.append(x)
 
-        # 2. Readout layer
-        x = global_mean_pool(x, batch)  # [batch_size, hidden_channels]
+        if self.jk is not None:
+            x = self.jk(jk_inputs)
 
-        # 3. Apply a final classifier
+        x = global_mean_pool(x, batch)
         x = self.linear(x)
-
         return x
 
 
@@ -93,6 +107,7 @@ class GraphSAGE(torch.nn.Module):
         local_layers: int = 2,
         dropout: float = 0.5,
         norm: Literal["batch", "layer"] | None = None,
+        jk: Literal["max", "cat", "lstm"] | None = None,
         res: bool = False,
     ):
         super(GraphSAGE, self).__init__()
@@ -120,20 +135,37 @@ class GraphSAGE(torch.nn.Module):
             [nl if nl is not None else torch.nn.Identity() for nl in norm_layers]
         )
 
-        self.linear: Linear = torch.nn.Linear(hidden_channels, 1)
+        self.jk_mode = jk
+        if jk is not None:
+            self.jk = JumpingKnowledge(jk, hidden_channels, local_layers)
+            jk_channels = (
+                hidden_channels * local_layers if jk == "cat" else hidden_channels
+            )
+        else:
+            self.jk = None
+            jk_channels = hidden_channels
+
+        self.linear: Linear = torch.nn.Linear(jk_channels, 1)
 
     def forward(self, data):
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
+        jk_inputs: list[torch.Tensor] = []
         for i, conv in enumerate(self.local_convs):
             if self.res:
                 x = conv(x, edge_index) + self.res_linears[i](x)
             else:
                 x = conv(x, edge_index)
-            x = self.norm_layers[i](x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-            if i < len(self.local_convs) - 1:
+
+            if i < len(self.local_convs) - 1 or self.jk is not None:
+                x = self.norm_layers[i](x)
                 x = F.relu(x)
+                x = F.dropout(x, p=self.dropout, training=self.training)
+                if self.jk is not None:
+                    jk_inputs.append(x)
+
+        if self.jk is not None:
+            x = self.jk(jk_inputs)
 
         x = global_mean_pool(x, batch)
         x = self.linear(x)
@@ -149,29 +181,106 @@ class GATv2(torch.nn.Module):
         local_layers: int = 2,
         dropout: float = 0.5,
         norm: Literal["batch", "layer"] | None = None,
+        jk: Literal["max", "cat", "lstm"] | None = None,
         res: bool = False,
     ):
         super(GATv2, self).__init__()
 
-        # First layer uses heads; subsequent layers use heads=1 and adjust channels accordingly
-        convs = [GATv2Conv(num_node_features, hidden_channels, heads=heads)]
+        if hidden_channels % heads != 0:
+            raise ValueError(
+                f"Ensure that the number of output channels of "
+                + f"'GATConv' (got '{hidden_channels}') is divisible "
+                + f"by the number of heads (got '{heads}')"
+            )
+
+        # First layer uses heads; subsequent layers use heads=1 and adjust channels ac“cordingly
+        convs = [
+            GATv2Conv(
+                num_node_features, hidden_channels // heads, heads=heads, residual=res
+            )
+        ]
         for _ in range(local_layers - 1):
-            convs.append(GATv2Conv(hidden_channels, hidden_channels, heads=heads))
+            convs.append(
+                GATv2Conv(
+                    hidden_channels, hidden_channels // heads, heads=heads, residual=res
+                )
+            )
         self.local_convs: ModuleList = torch.nn.ModuleList(convs)
 
+        self.dropout: float = dropout
+
+        norm_layers = [
+            _make_norm_layer(norm, hidden_channels) for _ in range(local_layers)
+        ]
+        self.norm_layers: ModuleList = torch.nn.ModuleList(
+            [nl if nl is not None else torch.nn.Identity() for nl in norm_layers]
+        )
+
+        base_channels = hidden_channels
+        self.jk_mode: Literal["max", "cat", "lstm"] | None = jk
+        if jk is not None:
+            self.jk = JumpingKnowledge(jk, base_channels, local_layers)
+            jk_channels = base_channels * local_layers if jk == "cat" else base_channels
+        else:
+            self.jk = None
+            jk_channels = base_channels
+
+        self.linear: Linear = torch.nn.Linear(jk_channels, 1)
+
+    def forward(self, data):
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+
+        jk_inputs: list[torch.Tensor] = []
+        for i, conv in enumerate(self.local_convs):
+            # Residual passed as arg to GatConv layer
+            x = conv(x, edge_index)
+
+            if i < len(self.local_convs) - 1 or self.jk is not None:
+                x = self.norm_layers[i](x)
+                x = F.relu(x)
+                x = F.dropout(x, p=self.dropout, training=self.training)
+                if self.jk is not None:
+                    jk_inputs.append(x)
+
+        if self.jk is not None:
+            x = self.jk(jk_inputs)
+
+        x = global_mean_pool(x, batch)
+        x = self.linear(x)
+        return x
+
+
+class GIN(torch.nn.Module):
+    def __init__(
+        self,
+        num_node_features: int,
+        hidden_channels: int = 64,
+        local_layers: int = 3,
+        dropout: float = 0.5,
+        norm: Literal["batch", "layer"] | None = None,
+        jk: Literal["max", "cat", "lstm"] | None = None,
+        res: bool = False,
+    ):
+        super(GIN, self).__init__()
         self.dropout = dropout
 
-        # Residual linears for GATv2: sizes depend on heads and layer position
+        def make_mlp(in_dim: int) -> torch.nn.Sequential:
+            return torch.nn.Sequential(
+                torch.nn.Linear(in_dim, hidden_channels),
+                torch.nn.ReLU(),
+                torch.nn.Linear(hidden_channels, hidden_channels),
+            )
+
+        convs = [GINConv(make_mlp(num_node_features))]
+        convs += [GINConv(make_mlp(hidden_channels)) for _ in range(local_layers - 1)]
+        self.local_convs: ModuleList = torch.nn.ModuleList(convs)
+
         self.res = res
-        res_linears = []
-        prev_dim = num_node_features
-        for i in range(local_layers):
-            if i == 0:
-                out_dim = hidden_channels * heads
-            else:
-                out_dim = hidden_channels
-            res_linears.append(torch.nn.Linear(prev_dim, out_dim))
-            prev_dim = out_dim
+        res_linears = [torch.nn.Linear(num_node_features, hidden_channels)]
+        res_linears += [
+            torch.nn.Linear(hidden_channels, hidden_channels)
+            for _ in range(local_layers - 1)
+        ]
         self.res_linears: ModuleList = torch.nn.ModuleList(res_linears)
 
         norm_layers = [
@@ -181,20 +290,37 @@ class GATv2(torch.nn.Module):
             [nl if nl is not None else torch.nn.Identity() for nl in norm_layers]
         )
 
-        self.linear = torch.nn.Linear(hidden_channels, 1)
+        self.jk_mode = jk
+        if jk is not None:
+            self.jk = JumpingKnowledge(jk, hidden_channels, local_layers)
+            jk_channels = (
+                hidden_channels * local_layers if jk == "cat" else hidden_channels
+            )
+        else:
+            self.jk = None
+            jk_channels = hidden_channels
+
+        self.linear = torch.nn.Linear(jk_channels, 1)
 
     def forward(self, data):
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
+        jk_inputs: list[torch.Tensor] = []
         for i, conv in enumerate(self.local_convs):
             if self.res:
                 x = conv(x, edge_index) + self.res_linears[i](x)
             else:
                 x = conv(x, edge_index)
-            x = self.norm_layers[i](x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-            if i < len(self.local_convs) - 1:
+
+            if i < len(self.local_convs) - 1 or self.jk is not None:
+                x = self.norm_layers[i](x)
                 x = F.relu(x)
+                x = F.dropout(x, p=self.dropout, training=self.training)
+                if self.jk is not None:
+                    jk_inputs.append(x)
+
+        if self.jk is not None:
+            x = self.jk(jk_inputs)
 
         x = global_mean_pool(x, batch)
         x = self.linear(x)
