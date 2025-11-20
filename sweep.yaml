@@ -16,8 +16,8 @@ parameters:
   trainer.init.optimizer.lr:
     values: [3e-4]
     distribution: categorical
-  model.name:
-    values: [gin, gat, gcn]
+  model:
+    values: [gin, gat, sage]
     distribution: categorical
   model.init.hidden_channels:
     values: [128, 256, 512]

@@ -36,6 +36,7 @@ class GCN(torch.nn.Module):
         res: bool = False,
     ):
         super(GCN, self).__init__()
+        jk = None if jk == 'None' else jk
         self.dropout: float = dropout
 
         convs = [GCNConv(num_node_features, hidden_channels)]
@@ -111,6 +112,7 @@ class GraphSAGE(torch.nn.Module):
         res: bool = False,
     ):
         super(GraphSAGE, self).__init__()
+        jk = None if jk == 'None' else jk
         self.dropout = dropout
 
         convs = [SAGEConv(num_node_features, hidden_channels)]
@@ -185,6 +187,7 @@ class GATv2(torch.nn.Module):
         res: bool = False,
     ):
         super(GATv2, self).__init__()
+        jk = None if jk == 'None' else jk
 
         if hidden_channels % heads != 0:
             raise ValueError(
@@ -262,6 +265,7 @@ class GIN(torch.nn.Module):
         res: bool = False,
     ):
         super(GIN, self).__init__()
+        jk = None if jk == 'None' else jk
         self.dropout = dropout
 
         def make_mlp(in_dim: int) -> torch.nn.Sequential:
