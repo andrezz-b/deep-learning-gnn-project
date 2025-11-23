@@ -9,6 +9,7 @@ from torch_geometric.nn import (
     GATv2Conv,
     GCNConv,
     GINConv,
+    GraphNorm,
     JumpingKnowledge,
     LayerNorm,
     SAGEConv,
@@ -21,6 +22,8 @@ def _make_norm_layer(norm_type: str | None, channels: int) -> torch.nn.Module | 
         return BatchNorm(channels)
     if norm_type == "layer":
         return LayerNorm(channels)
+    if norm_type == 'graph':
+        return GraphNorm(channels)
     return None
 
 
@@ -31,7 +34,7 @@ class GCN(torch.nn.Module):
         hidden_channels: int = 64,
         local_layers: int = 3,
         dropout: float = 0.5,
-        norm: Literal["batch", "layer"] | None = None,
+        norm: Literal["batch", "layer", "graph"] | None = None,
         jk: Literal["max", "cat", "lstm"] | None = None,
         res: bool = False,
     ):
@@ -107,7 +110,7 @@ class GraphSAGE(torch.nn.Module):
         hidden_channels: int = 64,
         local_layers: int = 2,
         dropout: float = 0.5,
-        norm: Literal["batch", "layer"] | None = None,
+        norm: Literal["batch", "layer", "graph"] | None = None,
         jk: Literal["max", "cat", "lstm"] | None = None,
         res: bool = False,
     ):
@@ -182,7 +185,7 @@ class GATv2(torch.nn.Module):
         heads: int = 1,
         local_layers: int = 2,
         dropout: float = 0.5,
-        norm: Literal["batch", "layer"] | None = None,
+        norm: Literal["batch", "layer", "graph"] | None = None,
         jk: Literal["max", "cat", "lstm"] | None = None,
         res: bool = False,
     ):
@@ -260,7 +263,7 @@ class GIN(torch.nn.Module):
         hidden_channels: int = 64,
         local_layers: int = 3,
         dropout: float = 0.5,
-        norm: Literal["batch", "layer"] | None = None,
+        norm: Literal["batch", "layer", "graph"] | None = None,
         jk: Literal["max", "cat", "lstm"] | None = None,
         res: bool = False,
     ):

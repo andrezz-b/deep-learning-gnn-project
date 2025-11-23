@@ -14,28 +14,28 @@ parameters:
     values: [0.005]
     distribution: categorical
   trainer.init.optimizer.lr:
-    values: [3e-4]
+    values: [0.0005]
     distribution: categorical
   model:
-    values: [gin, gat, sage]
+    values: [gin, gcn]
     distribution: categorical
   model.init.hidden_channels:
-    values: [128, 256, 512]
+    values: [256, 512]
     distribution: categorical
   model.init.local_layers:
-    values: [3, 5, 7]
+    values: [7, 9, 11]
     distribution: categorical
   model.init.dropout:
-    values: [0.1]
+    values: [0.1, 0.2]
     distribution: categorical
   model.init.norm:
-    values: [batch]
+    values: [batch, graph]
     distribution: categorical
   model.init.res:
     values: [true]
     distribution: categorical
   model.init.jk:
-    values: [max, null]
+    values: [cat, null]
     distribution: categorical
 
 command:
