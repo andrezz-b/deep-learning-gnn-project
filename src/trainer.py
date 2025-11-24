@@ -92,4 +92,5 @@ class SemiSupervisedEnsemble:
         save_dir.mkdir(parents=True, exist_ok=True)
         for i, model in enumerate(self.models):
             torch.save(model.state_dict(), save_dir / f"model_{i}.pt")
+            print(f"Saved model {i} weights to {save_dir / f'model_{i}.pt'}")
         return results

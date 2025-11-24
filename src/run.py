@@ -33,11 +33,12 @@ def main(cfg):
 
     dm = hydra.utils.instantiate(cfg.dataset.init)
 
-    model = hydra.utils.instantiate(cfg.model.init).to(device)
+    modelSUP = hydra.utils.instantiate(cfg.model.init).to(device)
+    modelUNSUPS = hydra.utils.instantiate(cfg.model.init).to(device)
 
     if cfg.compile_model:
         model = torch.compile(model)
-    models = [model]
+    models = [modelSUP]
 
     trainer = hydra.utils.instantiate(cfg.trainer.init, models=models, logger=logger, datamodule=dm, device=device)
 
