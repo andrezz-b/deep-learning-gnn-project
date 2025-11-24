@@ -1,0 +1,41 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python Debugger: Run src/run.py with prompts",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/run.py",
+      "console": "integratedTerminal",
+      // each option is a separate text input prompt
+      "args": [
+        "model=${input:model}",
+        "optimizer=${input:optimizer}",
+        "scheduler=${input:scheduler}"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "model",
+      "type": "promptString",
+      "description": "Model option (e.g. gcn)",
+      "default": "gcn"
+    },
+    {
+      "id": "optimizer",
+      "type": "promptString",
+      "description": "Optimizer option (e.g. adam)",
+      "default": "adam"
+    },
+    {
+      "id": "scheduler",
+      "type": "promptString",
+      "description": "Scheduler option (e.g. cosine)",
+      "default": "cosine"
+    }
+  ]
+}

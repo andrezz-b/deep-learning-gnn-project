@@ -1,6 +1,8 @@
 defaults:
   - dataset: qm9
   - trainer: semi-supervised-ensemble  # options: self-supervised, supervised
+  - optimizer: adamw
+  - scheduler: step
   - logger: wandb
   - model: gcn
   - _self_
