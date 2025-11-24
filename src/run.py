@@ -7,6 +7,9 @@ from omegaconf import OmegaConf
 
 from utils import seed_everything
 
+from pathlib import Path
+from hydra.utils import get_original_cwd
+
 
 @hydra.main(
     config_path="../configs/",
@@ -35,10 +38,14 @@ def main(cfg):
     if cfg.compile_model:
         model = torch.compile(model)
     models = [model]
+
     trainer = hydra.utils.instantiate(cfg.trainer.init, models=models, logger=logger, datamodule=dm, device=device)
 
     results = trainer.train(**cfg.trainer.train)
     results = torch.Tensor(results)
+
+    logger.end_run()
+
 
 
 
