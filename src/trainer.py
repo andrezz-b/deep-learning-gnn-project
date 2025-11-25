@@ -3,6 +3,8 @@ from functools import partial
 import numpy as np
 import torch
 from tqdm import tqdm
+from pathlib import Path
+from hydra.utils import get_original_cwd
 
 
 class SemiSupervisedEnsemble:
@@ -83,4 +85,12 @@ class SemiSupervisedEnsemble:
                 summary_dict.update(val_metrics)
                 pbar.set_postfix(summary_dict)
             self.logger.log_dict(summary_dict, step=epoch)
+        
+        #save model weights
+        save_dir = Path(get_original_cwd()) / "models" /self.logger.run.id
+        save_dir.mkdir(parents=True, exist_ok=True)
+        for i, model in enumerate(self.models):
+            torch.save(model.state_dict(), save_dir / f"model_{i}.pt")
+            print(f"Saved model {i} weights to {save_dir / f'model_{i}.pt'}")
+            
         return results
