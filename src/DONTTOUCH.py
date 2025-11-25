@@ -10,7 +10,7 @@ from utils import seed_everything
 
 
 #call by:
-#python3 src/tester.py +test.checkpoint_dir=models/folderName" +test.modelcount=n
+#python3 src/DONTTOUCH.py +test.checkpoint_dir=models/folderName" +test.modelcount=n
 
 #
 #
