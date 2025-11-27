@@ -1,0 +1,44 @@
+program: src/run.py
+method: grid
+parameters:
+  trainer.train.total_epochs:
+    values: [500]
+    distribution: categorical
+  trainer.init.scheduler.step_size:
+    values: [10]
+    distribution: categorical
+  trainer.init.scheduler.gamma:
+    values: [0.99]
+    distribution: categorical
+  trainer.init.optimizer.weight_decay:
+    values: [0.005]
+    distribution: categorical
+  trainer.init.optimizer.lr:
+    values: [0.0005]
+    distribution: categorical
+  model:
+    values: [gin, gcn]
+    distribution: categorical
+  model.init.hidden_channels:
+    values: [256, 512]
+    distribution: categorical
+  model.init.local_layers:
+    values: [7, 9, 11]
+    distribution: categorical
+  model.init.dropout:
+    values: [0.1, 0.2]
+    distribution: categorical
+  model.init.norm:
+    values: [batch, graph]
+    distribution: categorical
+  model.init.res:
+    values: [true]
+    distribution: categorical
+  model.init.jk:
+    values: [cat, null]
+    distribution: categorical
+
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

@@ -1,15 +1,16 @@
 defaults:
   - _self_
 
-name: gcn
+name: gat
 
 init:
-  _target_: models.GCN
+  _target_: models.GATv2
   _partial_: false
   num_node_features: 11
-  local_layers: 3
   hidden_channels: 128
+  heads: 4
+  local_layers: 3
   dropout: 0.0
-  norm: batch # batch, layer or null
+  norm: batch
   res: true
-  jk: lstm
+  jk: null

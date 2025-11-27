@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run GNN",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "src/run.py",
+        "model=${input:hydraModel}"
+      ],
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "options": { "cwd": "${workspaceFolder}" }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "hydraModel",
+      "type": "promptString",
+      "description": "Hydra model name (e.g., gcn, sage)",
+      "default": "gcn"
+    }
+  ]
+}

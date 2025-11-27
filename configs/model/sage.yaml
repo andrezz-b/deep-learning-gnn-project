@@ -1,15 +1,16 @@
 defaults:
   - _self_
 
-name: gcn
+name: sage
 
 init:
-  _target_: models.GCN
+  _target_: models.GraphSAGE
   _partial_: false
   num_node_features: 11
+  hidden_channels: 256
   local_layers: 3
-  hidden_channels: 128
   dropout: 0.0
-  norm: batch # batch, layer or null
+  norm: batch
   res: true
-  jk: lstm
+  jk: max
+

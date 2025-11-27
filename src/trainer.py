@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
+
 class SemiSupervisedEnsemble:
     def __init__(
         self,
@@ -53,6 +54,7 @@ class SemiSupervisedEnsemble:
 
     def train(self, total_epochs, validation_interval):
         #self.logger.log_dict()
+        results = []
         for epoch in (pbar := tqdm(range(1, total_epochs + 1))):
             for model in self.models:
                 model.train()
@@ -70,6 +72,9 @@ class SemiSupervisedEnsemble:
             self.scheduler.step()
             supervised_losses_logged = np.mean(supervised_losses_logged)
 
+            # collect per-epoch supervised loss for return
+            results.append(supervised_losses_logged)
+
             summary_dict = {
                 "supervised_loss": supervised_losses_logged,
             }
@@ -78,3 +83,4 @@ class SemiSupervisedEnsemble:
                 summary_dict.update(val_metrics)
                 pbar.set_postfix(summary_dict)
             self.logger.log_dict(summary_dict, step=epoch)
+        return results
