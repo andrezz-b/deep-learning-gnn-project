@@ -110,11 +110,13 @@ class GraphMixup:
         logger: WandBLogger,
         datamodule: QM9DataModule,
         unsupervised_weight: float = 1.0,  # Max weight for unsupervised loss
+        alpha: float = 1.0
     ):
         assert isinstance(models[0], GIN), "Only GIN is supported"
         self.device = device
         self.models = models
         self.supervised_criterion = supervised_criterion
+        self.alpha = alpha
 
         all_params = [p for m in self.models for p in m.parameters()]
         self.optimizer = optimizer(params=all_params)
@@ -202,7 +204,7 @@ class GraphMixup:
                         # Manifold Mixup on labeled data
                         # Model returns: pred, y_a, y_b, lam
                         pred_sup, y_a, y_b, lam = model(
-                            x_label, mixup=True, target=targets_label
+                            x_label, mixup=True, target=targets_label, alpha=self.alpha
                         )
 
                         # Mixup Loss calculation: lam * Loss(pred, y_a) + (1-lam) * Loss(pred, y_b)
@@ -213,7 +215,7 @@ class GraphMixup:
                         # --- 4. FCN Forward Pass (Unsupervised Mixup) ---
                         # Manifold Mixup on unlabeled data using Pseudo-Labels
                         pred_unsup, y_a_u, y_b_u, lam_u = model(
-                            x_unlabel, mixup=True, target=pseudo_targets
+                            x_unlabel, mixup=True, target=pseudo_targets, alpha=self.alpha
                         )
 
                         loss_fcn_unsup = lam_u * self.supervised_criterion(
