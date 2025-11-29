@@ -149,15 +149,18 @@ class GraphMixup:
         return {"val_MSE": val_loss}
 
     def get_consistency_weight(self, epoch: int, total_epochs: int) -> float:
-        # Sigmoid ramp-up for unsupervised weight w(t) as per paper
-        # Increases from 0 to self.unsupervised_weight
-        rampup_length = total_epochs // 2
-        if epoch < rampup_length:
-            p = max(0.0, float(epoch)) / float(rampup_length)
-            p = 1.0 - p
-            return self.unsupervised_weight * np.exp(-5.0 * p * p)
-        else:
+        # First 50% of epochs: weight = 0. Last 50%: sigmoid-like ramp-up to self.unsupervised_weight.
+        rampup_start = total_epochs // 2
+        if epoch <= rampup_start:
+            return 0.0
+
+        rampup_length = total_epochs - rampup_start
+        if rampup_length <= 0:
             return self.unsupervised_weight
+
+        p = float(epoch - rampup_start) / float(rampup_length)  # in (0, 1]
+        p = min(max(p, 0.0), 1.0)
+        return self.unsupervised_weight * np.exp(-5.0 * (1.0 - p) * (1.0 - p))
 
     def train(self, total_epochs: int, validation_interval: int):
         results = []
