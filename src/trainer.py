@@ -181,43 +181,45 @@ class GraphMixup:
                 total_loss = 0.0
 
                 for model in self.models:
+                    rand_index = np.random.randint(0, 1)
                     # --- 1. GNN Forward Pass (Supervised) ---
                     # Standard training on labeled data
-                    pred_gnn = model(x_label)
-                    loss_gnn = self.supervised_criterion(pred_gnn, targets_label)
+                    if rand_index == 0:
+                        pred_gnn = model(x_label)
+                        total_loss += self.supervised_criterion(pred_gnn, targets_label)
+                    else:
+                        # --- 2. Generate Pseudo-Labels (Unlabeled) ---
+                        # Use GNN to predict targets for unlabeled data
+                        with torch.no_grad():
+                            model.eval()
+                            pseudo_targets = model(x_unlabel)
+                            model.train()
 
-                    # --- 2. Generate Pseudo-Labels (Unlabeled) ---
-                    # Use GNN to predict targets for unlabeled data
-                    with torch.no_grad():
-                        model.eval()
-                        pseudo_targets = model(x_unlabel)
-                        model.train()
+                        # --- 3. FCN Forward Pass (Supervised Mixup) ---
+                        # Manifold Mixup on labeled data
+                        # Model returns: pred, y_a, y_b, lam
+                        pred_sup, y_a, y_b, lam = model(
+                            x_label, mixup=True, target=targets_label
+                        )
 
-                    # --- 3. FCN Forward Pass (Supervised Mixup) ---
-                    # Manifold Mixup on labeled data
-                    # Model returns: pred, y_a, y_b, lam
-                    pred_sup, y_a, y_b, lam = model(
-                        x_label, mixup=True, target=targets_label
-                    )
+                        # Mixup Loss calculation: lam * Loss(pred, y_a) + (1-lam) * Loss(pred, y_b)
+                        loss_fcn_sup = lam * self.supervised_criterion(pred_sup, y_a) + (
+                            1 - lam
+                        ) * self.supervised_criterion(pred_sup, y_b)
 
-                    # Mixup Loss calculation: lam * Loss(pred, y_a) + (1-lam) * Loss(pred, y_b)
-                    loss_fcn_sup = lam * self.supervised_criterion(pred_sup, y_a) + (
-                        1 - lam
-                    ) * self.supervised_criterion(pred_sup, y_b)
+                        # --- 4. FCN Forward Pass (Unsupervised Mixup) ---
+                        # Manifold Mixup on unlabeled data using Pseudo-Labels
+                        pred_unsup, y_a_u, y_b_u, lam_u = model(
+                            x_unlabel, mixup=True, target=pseudo_targets
+                        )
 
-                    # --- 4. FCN Forward Pass (Unsupervised Mixup) ---
-                    # Manifold Mixup on unlabeled data using Pseudo-Labels
-                    pred_unsup, y_a_u, y_b_u, lam_u = model(
-                        x_unlabel, mixup=True, target=pseudo_targets
-                    )
+                        loss_fcn_unsup = lam_u * self.supervised_criterion(
+                            pred_unsup, y_a_u
+                        ) + (1 - lam_u) * self.supervised_criterion(pred_unsup, y_b_u)
 
-                    loss_fcn_unsup = lam_u * self.supervised_criterion(
-                        pred_unsup, y_a_u
-                    ) + (1 - lam_u) * self.supervised_criterion(pred_unsup, y_b_u)
-
-                    # --- 5. Total Loss Combination ---
-                    # Loss = L_GNN + L_FCN_Supervised + w(t) * L_FCN_Unsupervised
-                    total_loss += loss_gnn + loss_fcn_sup + (w_t * loss_fcn_unsup)
+                        # --- 5. Total Loss Combination ---
+                        # Loss = L_GNN + L_FCN_Supervised + w(t) * L_FCN_Unsupervised
+                        total_loss += loss_fcn_sup + (w_t * loss_fcn_unsup)
 
                 loss: torch.Tensor = total_loss
                 loss.backward()
