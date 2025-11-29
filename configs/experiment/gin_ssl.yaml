@@ -1,0 +1,24 @@
+# @package _global_
+
+defaults:
+  - override /model: gin
+  - override /optimizer: adamw
+  - override /scheduler: cosine
+  - override /trainer: graph-mixup
+
+model:
+  init:
+    local_layers: 2
+    hidden_channels: 64
+    dropout: 0.1
+    norm: graph
+    res: true
+    jk: cat
+
+optimizer:
+  lr: 0.0003
+  weight_decay: 0.0005
+
+trainer:
+  train:
+    total_epochs: 250

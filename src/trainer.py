@@ -134,18 +134,19 @@ class GraphMixup:
             model.eval()
 
         val_losses = []
+
         with torch.no_grad():
-            for batch in self.val_dataloader:
-                batch = batch.to(self.device)
-                targets = batch.y
+            for x, targets in self.val_dataloader:
+                x, targets = x.to(self.device), targets.to(self.device)
 
                 # Ensemble prediction
-                preds = [model(batch) for model in self.models]
+                preds = [model(x) for model in self.models]
                 avg_preds = torch.stack(preds).mean(0)
 
                 val_loss = torch.nn.functional.mse_loss(avg_preds, targets)
                 val_losses.append(val_loss.item())
-        return {"val_MSE": np.mean(val_losses)}
+        val_loss = np.mean(val_losses)
+        return {"val_MSE": val_loss}
 
     def get_consistency_weight(self, epoch: int, total_epochs: int) -> float:
         # Sigmoid ramp-up for unsupervised weight w(t) as per paper
@@ -170,11 +171,11 @@ class GraphMixup:
             # w(t): Ramp-up weight for unsupervised loss
             w_t = self.get_consistency_weight(epoch, total_epochs)
 
-            for labeled_batch, unlabeled_batch in zip(
+            for (x_label, targets_label), (x_unlabel, targets_unlabel) in zip(
                 self.train_dataloader, self.unsupervised_train_dataloader
             ):
-                labeled_batch = labeled_batch.to(self.device)
-                unlabeled_batch = unlabeled_batch.to(self.device)
+                x_label, targets_label = x_label.to(self.device), targets_label.to(self.device)
+                x_unlabel, targets_unlabel = x_unlabel.to(self.device), targets_unlabel.to(self.device)
 
                 self.optimizer.zero_grad()
                 total_loss = 0.0
@@ -182,21 +183,21 @@ class GraphMixup:
                 for model in self.models:
                     # --- 1. GNN Forward Pass (Supervised) ---
                     # Standard training on labeled data
-                    pred_gnn = model(labeled_batch)
-                    loss_gnn = self.supervised_criterion(pred_gnn, labeled_batch.y)
+                    pred_gnn = model(x_label)
+                    loss_gnn = self.supervised_criterion(pred_gnn, targets_label)
 
                     # --- 2. Generate Pseudo-Labels (Unlabeled) ---
                     # Use GNN to predict targets for unlabeled data
                     with torch.no_grad():
                         model.eval()
-                        pseudo_targets = model(unlabeled_batch)
+                        pseudo_targets = model(x_unlabel)
                         model.train()
 
                     # --- 3. FCN Forward Pass (Supervised Mixup) ---
                     # Manifold Mixup on labeled data
                     # Model returns: pred, y_a, y_b, lam
                     pred_sup, y_a, y_b, lam = model(
-                        labeled_batch, mixup=True, target=labeled_batch.y
+                        x_label, mixup=True, target=targets_label
                     )
 
                     # Mixup Loss calculation: lam * Loss(pred, y_a) + (1-lam) * Loss(pred, y_b)
@@ -207,7 +208,7 @@ class GraphMixup:
                     # --- 4. FCN Forward Pass (Unsupervised Mixup) ---
                     # Manifold Mixup on unlabeled data using Pseudo-Labels
                     pred_unsup, y_a_u, y_b_u, lam_u = model(
-                        unlabeled_batch, mixup=True, target=pseudo_targets
+                        x_unlabel, mixup=True, target=pseudo_targets
                     )
 
                     loss_fcn_unsup = lam_u * self.supervised_criterion(
