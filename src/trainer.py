@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, cast
 
 import numpy as np
 import torch
@@ -110,13 +110,15 @@ class GraphMixup:
         logger: WandBLogger,
         datamodule: QM9DataModule,
         unsupervised_weight: float = 1.0,  # Max weight for unsupervised loss
-        alpha: float = 1.0
+        alpha: float = 1.0,
+        k_perturbations: int = 10
     ):
         assert isinstance(models[0], GIN), "Only GIN is supported"
         self.device = device
         self.models = models
         self.supervised_criterion = supervised_criterion
         self.alpha = alpha
+        self.k_perturbations = k_perturbations
 
         all_params = [p for m in self.models for p in m.parameters()]
         self.optimizer = optimizer(params=all_params)
@@ -183,48 +185,55 @@ class GraphMixup:
                 x_unlabel, targets_unlabel = x_unlabel.to(self.device), targets_unlabel.to(self.device)
 
                 self.optimizer.zero_grad()
-                total_loss = 0.0
+                model = cast(GIN, self.models[0])
 
-                for model in self.models:
-                    rand_index = np.random.randint(0, 1)
-                    # --- 1. GNN Forward Pass (Supervised) ---
-                    # Standard training on labeled data
-                    if rand_index == 0:
-                        pred_gnn = model(x_label)
-                        total_loss += self.supervised_criterion(pred_gnn, targets_label)
-                    else:
-                        # --- 2. Generate Pseudo-Labels (Unlabeled) ---
-                        # Use GNN to predict targets for unlabeled data
-                        with torch.no_grad():
-                            model.eval()
-                            pseudo_targets = model(x_unlabel)
-                            model.train()
+                rand_index = np.random.randint(0, 2)
+                # --- 1. GNN Forward Pass (Supervised) ---
+                # Standard training on labeled data
+                if rand_index == 0:
+                    pred_gnn = model(x_label)
+                    total_loss = self.supervised_criterion(pred_gnn, targets_label)
+                else:
+                    # --- 2. Generate Pseudo-Labels (K-Perturbations) ---
+                    # We perform K forward passes with dropout enabled (model.train())
+                    # to create "noisy" predictions, then average them.
+                    with torch.no_grad():
+                        model.train() # Ensure dropout is active for perturbations
+                        perturb_preds = []
+                        for _ in range(self.k_perturbations):
+                            perturb_preds.append(model(x_unlabel))
+                        
+                        # Average the K predictions to get stable pseudo-targets
+                        pseudo_targets = torch.stack(perturb_preds).mean(dim=0)
+                        
+                        # Detach to ensure no gradients flow through pseudo-label generation
+                        pseudo_targets = pseudo_targets.detach()
 
-                        # --- 3. FCN Forward Pass (Supervised Mixup) ---
-                        # Manifold Mixup on labeled data
-                        # Model returns: pred, y_a, y_b, lam
-                        pred_sup, y_a, y_b, lam = model(
-                            x_label, mixup=True, target=targets_label, alpha=self.alpha
-                        )
+                    # --- 3. FCN Forward Pass (Supervised Mixup) ---
+                    # Manifold Mixup on labeled data
+                    # Model returns: pred, y_a, y_b, lam
+                    pred_sup, y_a, y_b, lam = model(
+                        x_label, mixup=True, target=targets_label, alpha=self.alpha
+                    )
 
-                        # Mixup Loss calculation: lam * Loss(pred, y_a) + (1-lam) * Loss(pred, y_b)
-                        loss_fcn_sup = lam * self.supervised_criterion(pred_sup, y_a) + (
-                            1 - lam
-                        ) * self.supervised_criterion(pred_sup, y_b)
+                    # Mixup Loss calculation: lam * Loss(pred, y_a) + (1-lam) * Loss(pred, y_b)
+                    loss_fcn_sup = lam * self.supervised_criterion(pred_sup, y_a) + (
+                        1 - lam
+                    ) * self.supervised_criterion(pred_sup, y_b)
 
-                        # --- 4. FCN Forward Pass (Unsupervised Mixup) ---
-                        # Manifold Mixup on unlabeled data using Pseudo-Labels
-                        pred_unsup, y_a_u, y_b_u, lam_u = model(
-                            x_unlabel, mixup=True, target=pseudo_targets, alpha=self.alpha
-                        )
+                    # --- 4. FCN Forward Pass (Unsupervised Mixup) ---
+                    # Manifold Mixup on unlabeled data using Pseudo-Labels
+                    pred_unsup, y_a_u, y_b_u, lam_u = model(
+                        x_unlabel, mixup=True, target=pseudo_targets, alpha=self.alpha
+                    )
 
-                        loss_fcn_unsup = lam_u * self.supervised_criterion(
-                            pred_unsup, y_a_u
-                        ) + (1 - lam_u) * self.supervised_criterion(pred_unsup, y_b_u)
+                    loss_fcn_unsup = lam_u * self.supervised_criterion(
+                        pred_unsup, y_a_u
+                    ) + (1 - lam_u) * self.supervised_criterion(pred_unsup, y_b_u)
 
-                        # --- 5. Total Loss Combination ---
-                        # Loss = L_GNN + L_FCN_Supervised + w(t) * L_FCN_Unsupervised
-                        total_loss += loss_fcn_sup + (w_t * loss_fcn_unsup)
+                    # --- 5. Total Loss Combination ---
+                    # Loss = L_GNN + L_FCN_Supervised + w(t) * L_FCN_Unsupervised
+                    total_loss = loss_fcn_sup + (w_t * loss_fcn_unsup)
 
                 loss: torch.Tensor = total_loss
                 loss.backward()

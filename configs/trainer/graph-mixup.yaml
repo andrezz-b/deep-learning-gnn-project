@@ -15,5 +15,6 @@ init:
   scheduler: ${scheduler}
   unsupervised_weight: 1.0
   alpha: 1.0
+  k_perturbations: 10
 
     
