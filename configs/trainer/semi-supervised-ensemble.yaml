@@ -13,11 +13,3 @@ init:
     _target_: torch.nn.MSELoss
   optimizer: ${optimizer}
   scheduler: ${scheduler}
-  unsupervised_loss_weight: 0.05
-  unsupervised_warmup_epochs: 20
-  early_stopping:
-    monitor: val_MSE
-    patience: 20
-    min_delta: 0.0
-
-    
