@@ -30,12 +30,15 @@ def main(cfg):
 
     dm = hydra.utils.instantiate(cfg.dataset.init)
 
-    model = hydra.utils.instantiate(cfg.model.init).to(device)
+    model_one = hydra.utils.instantiate(cfg.model.init).to(device)
+    model_two = hydra.utils.instantiate(cfg.model.init).to(device)
 
     if cfg.compile_model:
-        model = torch.compile(model)
-    models = [model]
-    trainer = hydra.utils.instantiate(cfg.trainer.init, models=models, logger=logger, datamodule=dm, device=device)
+        model_one = torch.compile(model_one)
+        model_two = torch.compile(model_two)
+
+    models = [model_one, model_two]
+    trainer = hydra.utils.instantiate(cfg.trainer.init, models=models, logger=logger, datamodule=dm, device=device, lambda_cps=cfg.cps.lambda_cps)
 
     results = trainer.train(**cfg.trainer.train)
     results = torch.Tensor(results)

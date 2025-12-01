@@ -7,9 +7,9 @@ init:
   _target_: models.GIN
   _partial_: false
   num_node_features: 11
-  hidden_channels: 64
-  local_layers: 2
+  hidden_channels: 512
+  local_layers: 15
   dropout: 0.1
-  norm: batch
+  norm: graph
   res: true
-  jk: max
+  jk: cat

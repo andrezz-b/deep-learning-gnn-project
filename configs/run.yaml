@@ -2,9 +2,9 @@ defaults:
   - dataset: qm9
   - trainer: semi-supervised-ensemble  # options: self-supervised, supervised
   - optimizer: adamw
-  - scheduler: step
+  - scheduler: cosine
   - logger: wandb
-  - model: gcn
+  - model: gcn #gin perfroms best
   - _self_
 
 
@@ -14,3 +14,7 @@ force_deterministic: False # Force deterministic algorithms
 debug_mode: False # Debug mode
 result_dir: ./results
 compile_model: false # Whether to compile the model with torch.compile
+
+cps:
+  enabled: true
+  lambda_cps: 1.5 

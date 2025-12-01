@@ -5,9 +5,12 @@ import torch
 from tqdm import tqdm
 from pathlib import Path
 from hydra.utils import get_original_cwd
+import hydra
 
+#runs with module load python3/3.12.3
+#dtukey#ssh s253905@login.hpc.dtu.dk
 
-class SemiSupervisedEnsemble:
+class CPStrainer:
     def __init__(
         self,
         supervised_criterion,
@@ -17,20 +20,29 @@ class SemiSupervisedEnsemble:
         models,
         logger,
         datamodule,
+        lambda_cps,
     ):
         self.device = device
         self.models = models
+        self.lambda_cps = lambda_cps
+
 
         # Optim related things
         self.supervised_criterion = supervised_criterion
-        all_params = [p for m in self.models for p in m.parameters()]
-        self.optimizer = optimizer(params=all_params)
-        self.scheduler = scheduler(optimizer=self.optimizer)
+        #all_params = [p for m in self.models for p in m.parameters()]        
+        #self.optimizer = optimizer(params=all_params)
+
+        #split optimizers and schedulers for each model CPS
+        self.optimizers = [optimizer(params=m.parameters()) for m in self.models]
+        
+        #self.scheduler = scheduler(optimizer=self.optimizer)
+        self.schedulers = [scheduler(optimizer=opt) for opt in self.optimizers]
 
         # Dataloader setup
         self.train_dataloader = datamodule.train_dataloader()
         self.val_dataloader = datamodule.val_dataloader()
         self.test_dataloader = datamodule.test_dataloader()
+        self.unlabeled_dataloader = datamodule.unsupervised_train_dataloader()
 
         # Logging
         self.logger = logger
@@ -53,6 +65,15 @@ class SemiSupervisedEnsemble:
                 val_losses.append(val_loss.item())
         val_loss = np.mean(val_losses)
         return {"val_MSE": val_loss}
+    
+    def CPS_loss(self, preds_one, preds_two, lambda_cps):
+        with torch.no_grad():
+            pseudo_labels_one = torch.argmax(preds_one, dim=1)
+            pseudo_labels_two = torch.argmax(preds_two, dim=1)
+        loss_one = torch.nn.functional.cross_entropy(preds_one, pseudo_labels_two)
+        loss_two = torch.nn.functional.cross_entropy(preds_two, pseudo_labels_one)
+        return lambda_cps * (loss_one + loss_two)
+
 
     def train(self, total_epochs, validation_interval):
         #self.logger.log_dict()
@@ -61,18 +82,31 @@ class SemiSupervisedEnsemble:
             for model in self.models:
                 model.train()
             supervised_losses_logged = []
-            for x, targets in self.train_dataloader:
-                x, targets = x.to(self.device), targets.to(self.device)
-                self.optimizer.zero_grad()
+            #training loop rewamped for CPS
+
+            for (x_labeled, targets), (x_unlabeled, _) in zip(self.train_dataloader, self.unlabeled_dataloader):
+                x_labeled, targets = x_labeled.to(self.device), targets.to(self.device)
+                x_unlabeled = x_unlabeled.to(self.device)
+
+                # Zero gradients for all optimizers
+                for opt in self.optimizers:
+                    opt.zero_grad()
+
                 # Supervised loss
-                supervised_losses = [self.supervised_criterion(model(x), targets) for model in self.models]
+                supervised_losses = [self.supervised_criterion(model(x_labeled), targets) for model in self.models]
                 supervised_loss = sum(supervised_losses)
                 supervised_losses_logged.append(supervised_loss.detach().item() / len(self.models))  # type: ignore
-                loss = supervised_loss
-                loss.backward()  # type: ignore
-                self.optimizer.step()
-            self.scheduler.step()
-            supervised_losses_logged = np.mean(supervised_losses_logged)
+
+                # Semi-supervised CPS loss
+                preds = [model(x_unlabeled) for model in self.models]
+                cps_loss = self.CPS_loss(preds[0], preds[1], lambda_cps=self.lambda_cps)
+                
+                total_loss = supervised_loss + cps_loss
+                total_loss.backward()  # type: ignore
+
+                # Step all optimizers
+                for opt in self.optimizers:
+                    opt.step()
 
             # collect per-epoch supervised loss for return
             results.append(supervised_losses_logged)
@@ -94,3 +128,6 @@ class SemiSupervisedEnsemble:
             print(f"Saved model {i} weights to {save_dir / f'model_{i}.pt'}")
             
         return results
+
+
+#ssh-keygen -t ed25519 -C andreaslinus@gmail.com
