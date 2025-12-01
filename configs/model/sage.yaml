@@ -12,4 +12,5 @@ init:
   dropout: 0.0
   norm: batch
   res: true
+  jk: max
 

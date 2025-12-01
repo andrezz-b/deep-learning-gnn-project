@@ -125,3 +125,7 @@ venv/
 
 # multirun
 src/multirun/
+
+# Wandb sweep configs
+wandb/sweep-*
+hydralance/

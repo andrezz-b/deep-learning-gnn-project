@@ -11,16 +11,8 @@ init:
   _target_: trainer.SemiSupervisedEnsemble
   supervised_criterion:
     _target_: torch.nn.MSELoss
-  optimizer:
-    _target_: torch.optim.AdamW
-    _partial_: true
-    lr: 0.002
-    weight_decay: 0.0001
-  scheduler:
-    _target_: torch.optim.lr_scheduler.StepLR
-    _partial_: true
-    step_size: 1
-    gamma: 0.975
+  optimizer: ${optimizer}
+  scheduler: ${scheduler}
   unsupervised_loss_weight: 0.05
   unsupervised_warmup_epochs: 20
   early_stopping:

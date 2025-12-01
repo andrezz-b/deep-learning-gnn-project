@@ -7,5 +7,40 @@
     "**/.DS_Store": true,
     "**/Thumbs.db": true,
     "hydralance": true
+  },
+  // "terminal.integrated.defaultProfile.linux": "HPC CPU",
+  "terminal.integrated.profiles.linux": {
+    "HPC CPU": {
+      "path": "bash",
+      "args": [
+        "-ic",
+        "linuxsh"
+      ],
+      "overrideName": true
+    },
+    "HPC V100": {
+      "path": "bash",
+      "args": [
+        "-ic",
+        "voltash"
+      ],
+      "overrideName": true
+    },
+    "HPC A100": {
+      "path": "bash",
+      "args": [
+        "-ic",
+        "a100sh"
+      ],
+      "overrideName": true
+    },
+    "HPC SXM": {
+      "path": "bash",
+      "args": [
+        "-ic",
+        "sxm2sh"
+      ],
+      "overrideName": true
+    }
   }
 }
