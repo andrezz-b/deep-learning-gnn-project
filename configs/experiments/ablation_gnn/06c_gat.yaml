@@ -1,0 +1,31 @@
+# @package _global_
+
+defaults:
+  - override /model: gat
+  - override /optimizer: adamw
+  - override /scheduler: cosine
+  - override /trainer: semi-supervised-ensemble
+
+logger:
+  name: 06c_gat
+  group: ablation_gnn
+
+model:
+  init:
+    local_layers: 5
+    hidden_channels: 256
+    heads: 2
+    dropout: 0.1
+    norm: graph
+    res: true
+    jk: null
+
+optimizer:
+  lr: 0.0003
+  weight_decay: 0.0005
+
+trainer:
+  train:
+    total_epochs: 500
+
+save_model: true
