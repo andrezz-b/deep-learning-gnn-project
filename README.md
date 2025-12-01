@@ -47,6 +47,74 @@ python src/run.py model=gcn
 
 The configuration files are located in the `configs/` directory.
 
+## Experiments
+
+Experiments are reproducible runs with specific configurations. They are stored in `configs/experiments/`.
+
+### Creating an Experiment
+
+To create a new experiment, add a `.yaml` file to `configs/experiments/`.
+For example, create `configs/experiments/my_experiment.yaml`:
+
+```yaml
+# @package _global_
+
+defaults:
+  - override /model: gin
+  - override /optimizer: adam
+  - override /scheduler: cosine
+
+model:
+  init:
+    hidden_channels: 128
+    dropout: 0.5
+
+trainer:
+  train:
+    total_epochs: 100
+
+save_model: true
+```
+
+The `# @package _global_` directive allows the experiment config to override parameters at the global level.
+
+### Running an Experiment
+
+To run an experiment, use the `+experiments` command line argument:
+
+```bash
+python src/run.py +experiments=my_experiment
+```
+
+## Model Saving
+
+When `save_model: true` is set in your configuration (either in `configs/run.yaml` or an experiment file), trained model files will be saved to the project-level directory `saved_models/` by default. The path is controlled by the `model_save_dir` config entry in `configs/run.yaml`.
+
+If you are using the default `WandBLogger` (Weights & Biases), the code also uploads the saved model files as W&B artifacts for the active run. This happens automatically when `save_model: true` and W&B logging is enabled in your config.
+
+Examples:
+
+- Enable model saving globally (in `configs/run.yaml`):
+
+```yaml
+save_model: true
+model_save_dir: saved_models
+```
+
+- Or enable it per experiment (e.g. `configs/experiments/gcn_simple.yaml`):
+
+```yaml
+save_model: true
+```
+
+Where the files are stored locally (relative to the project root):
+
+```
+./saved_models/model.pt
+```
+
+And the same files will be attached to the WandB run as artifacts.
+
 ## Improving the predictive accuracy
 There are many ways to improve the GNN. Please try to get the validation error (MSE) as low as possible. I have not implemented the code to run on the test data. That is for you to do, but please wait until you have the final model.
 Here are some great resources:

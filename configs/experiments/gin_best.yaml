@@ -1,0 +1,26 @@
+# @package _global_
+
+defaults:
+  - override /model: gin
+  - override /optimizer: adamw
+  - override /scheduler: cosine
+  - override /trainer: semi-supervised-ensemble
+
+model:
+  init:
+    dropout: 0.1
+    hidden_channels: 512
+    jk: cat
+    local_layers: 12
+    norm: graph
+    res: true
+
+optimizer:
+  lr: 0.0003
+  weight_decay: 0.0005
+
+trainer:
+  train:
+    total_epochs: 1000
+
+save_model: true

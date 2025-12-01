@@ -2,6 +2,7 @@ from copy import deepcopy
 from typing import Any, Literal
 from typing import Literal
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.nn.modules.container import ModuleList
@@ -311,7 +312,21 @@ class GIN(torch.nn.Module):
 
         self.linear = torch.nn.Linear(jk_channels, 1)
 
-    def forward(self, data):
+    def forward(self, data, mixup: bool = False, target: torch.Tensor | None = None, alpha: float = 1.0):
+        """
+        Public forward method that dispatches to Normal GNN or FCN Mixup logic.
+        """
+        if mixup:
+            # We strictly need targets for Manifold Mixup
+            assert target is not None, "Target must be provided for mixup training"
+            return self._forward_fcn(data, target, alpha)
+        else:
+            return self._forward_normal(data)
+
+    def _forward_normal(self, data) -> torch.Tensor:
+        """
+        Standard GIN Forward Pass (Uses Graph Structure)
+        """
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
         jk_inputs: list[torch.Tensor] = []
@@ -331,22 +346,76 @@ class GIN(torch.nn.Module):
         if self.jk is not None:
             x = self.jk(jk_inputs)
 
-        x = global_mean_pool(x, batch) 
+        x = global_mean_pool(x, batch)
         x = self.linear(x)
         return x
+
+    def _forward_fcn(self, data, target: torch.Tensor, alpha: float):
+        """
+        FCN Forward Pass with Manifold Mixup (Ignores Graph Structure)
+        """
+        x, batch = data.x, data.batch
+
+        # 1. Create Empty Edges (FCN View)
+        # By passing empty edges, GINConv acts like a standard MLP on node features
+        empty_edge_index = torch.empty((2, 0), dtype=torch.long, device=x.device)
+
+        jk_inputs: list[torch.Tensor] = []
+        for i, conv in enumerate(self.local_convs):
+            if self.res:
+                x = conv(x, empty_edge_index) + self.res_linears[i](x)
+            else:
+                x = conv(x, empty_edge_index)
+
+            if i < len(self.local_convs) - 1 or self.jk is not None:
+                x = self.norm_layers[i](x)
+                x = F.relu(x)
+                x = F.dropout(x, p=self.dropout, training=self.training)
+                if self.jk is not None:
+                    jk_inputs.append(x)
+
+        if self.jk is not None:
+            x = self.jk(jk_inputs)
+
+        # 2. Pooling
+        # We pool the "node-level FCN" features into a graph embedding
+        x = global_mean_pool(x, batch)
+
+        # 3. Manifold Mixup (Applied at the Embedding Layer)
+        # We mix the pooled graph embeddings and the graph-level targets
+        if alpha > 0:
+            lam = np.random.beta(alpha, alpha)
+        else:
+            lam = 1.0
+
+        # Permute the batch (graphs), not the nodes
+        batch_size = x.size(0)
+        perm = torch.randperm(batch_size, device=x.device)
+
+        # Mix Hidden States (Embeddings)
+        x = lam * x + (1 - lam) * x[perm]
+
+        # Prepare Mixed Targets
+        target_a = target
+        target_b = target[perm]
+
+        # 4. Final Projection
+        x = self.linear(x)
+
+        return x, target_a, target_b, lam
 
 
 class MeanTeacher(torch.nn.Module):
     """
     forward(..., use_teacher=False) for training if we want to use the student model as usual,
     and use_teacher=True if we want the teacher's predictions
-    update_teacher() 
+    update_teacher()
     """
 
     def __init__(self, student_model: torch.nn.Module, ema_decay: float = 0.999, update_every: int = 1):
         super().__init__()
         self.student = student_model
-        self.teacher = deepcopy(student_model) # cloning the student model to teacher model 
+        self.teacher = deepcopy(student_model) # cloning the student model to teacher model
         self.teacher.requires_grad_(False) # goes through all params and sets the grad flag to False
         # we dont need to calculate and store gradients in teacher model, so autograd won't track operations on it
 
@@ -385,7 +454,7 @@ class MeanTeacher(torch.nn.Module):
         self._update_counter += 1
         if self._update_counter % self.update_every != 0:
             return # when the check succeeds (!= 0) the return exits the function and the loop is skipped entirely
-        
+
         # if the counter is divisible (% = 0):
         for teacher_param, student_param in zip(self.teacher.parameters(), self.student.parameters()): #teacher/student parameter pairs (same ordering thanks to deepcopy)
             teacher_param.data.mul_(self.ema_decay)
