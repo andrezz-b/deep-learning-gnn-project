@@ -4,7 +4,7 @@ defaults:
   - optimizer: adamw
   - scheduler: cosine
   - logger: wandb
-  - model: gcn #gin perfroms best
+  - model: gin #gin perfroms best
   - _self_
 
 

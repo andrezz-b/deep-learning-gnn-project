@@ -7,10 +7,14 @@ from pathlib import Path
 from hydra.utils import get_original_cwd
 import hydra
 
-#runs with module load python3/3.12.3
+#runs on cluster
+#module load python3/3.10.12
+#source venv/bin/activate
+#
+#
 #dtukey#ssh s253905@login.hpc.dtu.dk
 
-class CPStrainer:
+class SemiSupervisedEnsemble:
     def __init__(
         self,
         supervised_criterion,
@@ -57,11 +61,11 @@ class CPStrainer:
             for x, targets in self.val_dataloader:
                 x, targets = x.to(self.device), targets.to(self.device)
                 
-                # Ensemble prediction
-                preds = [model(x) for model in self.models]
-                avg_preds = torch.stack(preds).mean(0)
+                # eval only one model like in paper
                 
-                val_loss = torch.nn.functional.mse_loss(avg_preds, targets)
+                preds = self.models[0](x)
+                
+                val_loss = torch.nn.functional.mse_loss(preds, targets)
                 val_losses.append(val_loss.item())
         val_loss = np.mean(val_losses)
         return {"val_MSE": val_loss}
@@ -95,14 +99,16 @@ class CPStrainer:
                 # Supervised loss
                 supervised_losses = [self.supervised_criterion(model(x_labeled), targets) for model in self.models]
                 supervised_loss = sum(supervised_losses)
-                supervised_losses_logged.append(supervised_loss.detach().item() / len(self.models))  # type: ignore
-
+                supervised_losses_logged.append(supervised_loss.detach().item() / len(self.models))
                 # Semi-supervised CPS loss
-                preds = [model(x_unlabeled) for model in self.models]
-                cps_loss = self.CPS_loss(preds[0], preds[1], lambda_cps=self.lambda_cps)
+                predsu = [model(x_unlabeled) for model in self.models]
+                cps_unlabeled = self.CPS_loss(predsu[0], predsu[1], lambda_cps=self.lambda_cps)
+                preds_l = [model(x_labeled) for model in self.models]
+                cps_labeled = self.CPS_loss(preds_l[0], preds_l[1], lambda_cps=self.lambda_cps)
                 
-                total_loss = supervised_loss + cps_loss
-                total_loss.backward()  # type: ignore
+                total_loss = supervised_loss + cps_unlabeled + cps_labeled
+
+                total_loss.backward() 
 
                 # Step all optimizers
                 for opt in self.optimizers:
