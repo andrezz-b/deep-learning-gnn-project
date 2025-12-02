@@ -1,0 +1,13 @@
+defaults:
+  - dataset: qm9
+  - trainer: semi-supervised-ensemble
+  - optimizer: adamw
+  - scheduler: step
+  - logger: wandb
+  - model: gcn
+  - _self_
+
+seed: 0
+device: unset
+force_deterministic: false
+model_path: null # Path to the model checkpoint (.pt file)

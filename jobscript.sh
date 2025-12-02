@@ -55,6 +55,11 @@ find "$EXPDIR" -type f -name '*.yaml' | sort | while IFS= read -r f; do
 	echo
 done
 
-$PYTHON src/run.py +experiments=graph_mixup/gin_best_mixup
+$PYTHON src/run.py +experiments="graph_mixup/gin_best_mixup"
+status=$?
+if [ $status -ne 0 ]; then
+	echo "Experiment graph_mixup/gin_best_mixup failed with exit code $status" >&2
+	exit $status
+fi
 
 echo "All experiments completed."

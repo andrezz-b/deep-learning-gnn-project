@@ -8,7 +8,7 @@ defaults:
 
 logger:
   name: gin_best_graph_mixup
-  group: ablation_gnn
+  group: ssl_graph_mixup
 
 model:
   init:
@@ -19,11 +19,6 @@ model:
     norm: graph
     res: true
 
-trainer:
-  init:
-    unsupervised_weight: 0.1
-    alpha: 0.1
-
 optimizer:
   lr: 0.0003
   weight_decay: 0.0005
@@ -31,5 +26,8 @@ optimizer:
 trainer:
   train:
     total_epochs: 1000
+  init:
+    unsupervised_weight: 0.1
+    alpha: 0.1
 
 save_model: true

@@ -1,0 +1,34 @@
+[project]
+name = "deep-learning-gnn-project"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "hydra-core>=1.3.2",
+    "ipykernel>=7.1.0",
+    "notebook>=7.5.0",
+    "numpy>=2.3.4",
+    "omegaconf>=2.3.0",
+    "pandas>=2.3.3",
+    "pytorch-lightning>=2.5.6",
+    "torch>=2.9.0",
+    "torch-geometric>=2.7.0",
+    "torchvision>=0.24.0",
+    "tqdm>=4.67.1",
+    "wandb>=0.22.3",
+]
+
+[tool.uv]
+package = false
+
+[tool.basedpyright]
+include = ["src"]
+exclude = ["**/__pycache__"]
+
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+
+
+[dependency-groups]
+dev = ["ruff>=0.14.5"]
