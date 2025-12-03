@@ -6,6 +6,8 @@ from tqdm import tqdm
 from pathlib import Path
 from hydra.utils import get_original_cwd
 import hydra
+from itertools import cycle
+
 
 
 
@@ -24,6 +26,8 @@ class SemiSupervisedEnsemble:
         self.device = device
         self.models = models
         self.lambda_cps = lambda_cps
+        self.models = [m.to(self.device) for m in self.models]
+
 
 
         # Optim related things
@@ -42,6 +46,7 @@ class SemiSupervisedEnsemble:
         self.val_dataloader = datamodule.val_dataloader()
         self.test_dataloader = datamodule.test_dataloader()
         self.unlabeled_dataloader = datamodule.unsupervised_train_dataloader()
+        self.mse_loss = torch.nn.MSELoss()
 
         # Logging
         self.logger = logger
@@ -65,13 +70,10 @@ class SemiSupervisedEnsemble:
         val_loss = np.mean(val_losses)
         return {"val_MSE": val_loss}
     
-    def CPS_loss(self, preds_one, preds_two, lambda_cps):
-        with torch.no_grad():
-            pseudo_labels_one = torch.argmax(preds_one, dim=1)
-            pseudo_labels_two = torch.argmax(preds_two, dim=1)
-        loss_one = torch.nn.functional.cross_entropy(preds_one, pseudo_labels_two)
-        loss_two = torch.nn.functional.cross_entropy(preds_two, pseudo_labels_one)
-        return lambda_cps * (loss_one + loss_two)
+    def CPS_loss(self, preds_one, preds_two):
+        loss_one = torch.nn.functional.mse_loss(preds_one, preds_two.detach())
+        loss_two = torch.nn.functional.mse_loss(preds_two, preds_one.detach())
+        return (loss_one + loss_two)
 
 
     def train(self, total_epochs, validation_interval):
@@ -83,7 +85,7 @@ class SemiSupervisedEnsemble:
             supervised_losses_logged = []
             #training loop rewamped for CPS
 
-            for (x_labeled, targets), (x_unlabeled, _) in zip(self.train_dataloader, self.unlabeled_dataloader):
+            for (x_labeled, targets), (x_unlabeled, _) in zip(self.train_dataloader,cycle(self.unlabeled_dataloader)):
                 x_labeled, targets = x_labeled.to(self.device), targets.to(self.device)
                 x_unlabeled = x_unlabeled.to(self.device)
 
@@ -93,16 +95,16 @@ class SemiSupervisedEnsemble:
 
                 # Supervised loss
                 preds_l = [model(x_labeled) for model in self.models]
-                supervised_losses = [self.supervised_criterion(p, targets) for p in preds_l]
+                supervised_losses = [self.mse_loss(p, targets) for p in preds_l]
 
                 supervised_loss = sum(supervised_losses)
                 supervised_losses_logged.append(supervised_loss.detach().item() / len(self.models))
                 # Semi-supervised CPS loss
                 predsu = [model(x_unlabeled) for model in self.models]
-                cps_unlabeled = self.CPS_loss(predsu[0], predsu[1], lambda_cps=self.lambda_cps)
-                cps_labeled = self.CPS_loss(preds_l[0], preds_l[1], lambda_cps=self.lambda_cps)
+                cps_unlabeled = self.CPS_loss(predsu[0], predsu[1])
+                cps_labeled = self.CPS_loss(preds_l[0], preds_l[1])
                 
-                total_loss = supervised_loss + cps_unlabeled + cps_labeled
+                total_loss = supervised_loss + self.lambda_cps*(cps_unlabeled + cps_labeled)
 
                 total_loss.backward() 
 
@@ -123,6 +125,10 @@ class SemiSupervisedEnsemble:
                 pbar.set_postfix(summary_dict)
 
             self.logger.log_dict(summary_dict, step=epoch)
+            # Step all schedulers
+            for sch in self.schedulers:
+                sch.step()
+
         
         #save model weights
         save_dir = Path(get_original_cwd()) / "models" /self.logger.run.id
