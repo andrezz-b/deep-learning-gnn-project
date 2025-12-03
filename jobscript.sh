@@ -30,4 +30,5 @@ if [ -f .venv/bin/activate ]; then
 	. .venv/bin/activate
 fi
 
-wandb agent andrezzb-deep-learning-gnn/deep-learning-gnn/7gmixqis
+python src/run.py +experiments=gin_best_1500
+python src/run.py +experiments=graph_mixup/gin_best_1500_mixup
