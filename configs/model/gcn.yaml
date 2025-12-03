@@ -8,7 +8,7 @@ init:
   _partial_: false
   num_node_features: 11
   local_layers: 3
-  hidden_channels: 128
+  hidden_channels: 64
   dropout: 0.0
   norm: batch # batch, layer or null
   res: true

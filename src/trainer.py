@@ -7,12 +7,7 @@ from pathlib import Path
 from hydra.utils import get_original_cwd
 import hydra
 
-#runs on cluster
-#module load python3/3.10.12
-#source venv/bin/activate
-#
-#
-#dtukey#ssh s253905@login.hpc.dtu.dk
+
 
 class SemiSupervisedEnsemble:
     def __init__(
@@ -97,13 +92,14 @@ class SemiSupervisedEnsemble:
                     opt.zero_grad()
 
                 # Supervised loss
-                supervised_losses = [self.supervised_criterion(model(x_labeled), targets) for model in self.models]
+                preds_l = [model(x_labeled) for model in self.models]
+                supervised_losses = [self.supervised_criterion(p, targets) for p in preds_l]
+
                 supervised_loss = sum(supervised_losses)
                 supervised_losses_logged.append(supervised_loss.detach().item() / len(self.models))
                 # Semi-supervised CPS loss
                 predsu = [model(x_unlabeled) for model in self.models]
                 cps_unlabeled = self.CPS_loss(predsu[0], predsu[1], lambda_cps=self.lambda_cps)
-                preds_l = [model(x_labeled) for model in self.models]
                 cps_labeled = self.CPS_loss(preds_l[0], preds_l[1], lambda_cps=self.lambda_cps)
                 
                 total_loss = supervised_loss + cps_unlabeled + cps_labeled
@@ -115,15 +111,17 @@ class SemiSupervisedEnsemble:
                     opt.step()
 
             # collect per-epoch supervised loss for return
-            results.append(supervised_losses_logged)
-
+            epoch_supervised_loss = float(np.mean(supervised_losses_logged))
+            results.append(epoch_supervised_loss)
             summary_dict = {
-                "supervised_loss": supervised_losses_logged,
+                "supervised_loss": epoch_supervised_loss,
             }
+
             if epoch % validation_interval == 0 or epoch == total_epochs:
                 val_metrics = self.validate()
                 summary_dict.update(val_metrics)
                 pbar.set_postfix(summary_dict)
+
             self.logger.log_dict(summary_dict, step=epoch)
         
         #save model weights
@@ -136,4 +134,3 @@ class SemiSupervisedEnsemble:
         return results
 
 
-#ssh-keygen -t ed25519 -C andreaslinus@gmail.com
