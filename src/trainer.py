@@ -85,7 +85,7 @@ class SemiSupervisedEnsemble:
             supervised_losses_logged = []
             #training loop rewamped for CPS
 
-            for (x_labeled, targets), (x_unlabeled, _) in zip(self.train_dataloader,cycle(self.unlabeled_dataloader)):
+            for (x_labeled, targets), (x_unlabeled, _) in zip(self.train_dataloader, self.unlabeled_dataloader):
                 x_labeled, targets = x_labeled.to(self.device), targets.to(self.device)
                 x_unlabeled = x_unlabeled.to(self.device)
 
