@@ -30,36 +30,4 @@ if [ -f .venv/bin/activate ]; then
 	. .venv/bin/activate
 fi
 
-PYTHON=${PYTHON:-python}
-EXPDIR="configs/experiments"
-
-echo "Starting experiment run loop (looking in $EXPDIR)..."
-
-# Find all YAML experiment files (including nested dirs), run them in sorted order
-find "$EXPDIR" -type f -name '*.yaml' | sort | while IFS= read -r f; do
-	# compute path relative to configs/experiments and strip .yaml
-	rel="${f#$EXPDIR/}"
-	name="${rel%.yaml}"
-	echo "================================================================"
-	echo "Running experiment: $name"
-	echo "================================================================"
-
-	# Run the experiment; exit on failure so errors are visible in job logs
-	$PYTHON src/run.py +experiments="$name"
-	status=$?
-	if [ $status -ne 0 ]; then
-		echo "Experiment $name failed with exit code $status" >&2
-		exit $status
-	fi
-	echo "Completed experiment: $name"
-	echo
-done
-
-$PYTHON src/run.py +experiments="graph_mixup/gin_best_mixup"
-status=$?
-if [ $status -ne 0 ]; then
-	echo "Experiment graph_mixup/gin_best_mixup failed with exit code $status" >&2
-	exit $status
-fi
-
-echo "All experiments completed."
+wandb agent andrezzb-deep-learning-gnn/deep-learning-gnn/7gmixqis

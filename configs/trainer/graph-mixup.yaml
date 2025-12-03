@@ -16,5 +16,7 @@ init:
   unsupervised_weight: 1.0
   alpha: 1.0
   k_perturbations: 10
+  rampup_start_epoch: 0
+  rampup_end_epoch: 250
 
     
