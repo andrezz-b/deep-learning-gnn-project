@@ -30,5 +30,20 @@ if [ -f .venv/bin/activate ]; then
 	. .venv/bin/activate
 fi
 
-python src/run.py +experiments=gin_best_1500
-python src/run.py +experiments=graph_mixup/gin_best_1500_mixup
+PYTHON=${PYTHON:-python}
+EXPDIR="configs/experiments"
+
+echo "Starting experiment run sequence..."
+
+# Then: run the three new semi-supervised experiments
+for name in gin_best_20 gin_best_5 gin_best_1; do
+	echo "Running experiment: $name"
+	$PYTHON src/run.py +experiments="$name"
+	status=$?
+	if [ $status -ne 0 ]; then
+		echo "Experiment $name failed with exit code $status" >&2
+		exit $status
+	fi
+done
+
+echo "All experiments completed."
