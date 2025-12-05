@@ -1,0 +1,12 @@
+# @package _global_
+
+defaults:
+  - override /trainer: mean-teacher-trainer
+  - override /model: mean_teacher_gcn
+
+dataset:
+  init:
+    splits: [0.792, 0.008, 0.10, 0.10] # 1% labeled
+
+
+save_model: true

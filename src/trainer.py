@@ -268,15 +268,16 @@ class MeanTeacherTrainer:
             logger,
             datamodule,
             unsupervised_loss_weight: float = 0.0,
-            unsupervised_warmup_epochs: int = 0,
             early_stopping: dict | None = None,
     ):
         self.device = device
         self.models = models
 
-        # Optim related things
+        # Optimization related things
         self.supervised_criterion = supervised_criterion
-        all_params = [p for m in self.models for p in m.parameters()]
+        all_params = [
+            p for m in self.models for p in m.parameters() if p.requires_grad
+        ] # only student params get optimized
         self.optimizer = optimizer(params=all_params)
         self.scheduler = scheduler(optimizer=self.optimizer)
 
@@ -293,7 +294,6 @@ class MeanTeacherTrainer:
         # Logging
         self.logger = logger
         self.unsupervised_loss_weight = unsupervised_loss_weight
-        self.unsupervised_warmup_epochs = unsupervised_warmup_epochs
         self.early_stopping_cfg = early_stopping or {}
         self.early_stopping_monitor = self.early_stopping_cfg.get("monitor", "val_MSE")
         self.early_stopping_patience = self.early_stopping_cfg.get("patience", 0)
@@ -303,7 +303,7 @@ class MeanTeacherTrainer:
         if prefer_teacher:
             use_teacher = (
                     getattr(model, "teacher", None) is not None
-            )  # checks if the model has an attribute called teacher
+            )  # checking if the model has an attribute called "teacher"
             if use_teacher:
                 try:
                     return model(batch, use_teacher=True)
@@ -327,7 +327,7 @@ class MeanTeacherTrainer:
             for x, targets in self.val_dataloader:
                 x, targets = x.to(self.device), targets.to(self.device)
 
-                # Ensemble prediction
+                # ensemble prediction, averaging across models
                 preds = [
                     self._forward(model, x, prefer_teacher=True)
                     for model in self.models
@@ -340,16 +340,13 @@ class MeanTeacherTrainer:
         return {"val_MSE": val_loss}
 
     def train(self, total_epochs, validation_interval):
-        # self.logger.log_dict()
+        
         results = []
         best_metric = float("inf")
         epochs_since_improvement = 0
 
         for epoch in (pbar := tqdm(range(1, total_epochs + 1))):
-            warmup_scale = 1.0
-            if self.unsupervised_warmup_epochs > 0:
-                warmup_scale = min(1.0, epoch / self.unsupervised_warmup_epochs)
-            effective_unsup_weight = self.unsupervised_loss_weight * warmup_scale
+            effective_unsup_weight = self.unsupervised_loss_weight
             for model in self.models:
                 model.train()
             supervised_losses_logged = []
@@ -363,7 +360,7 @@ class MeanTeacherTrainer:
             for x, targets in self.train_dataloader:
                 x, targets = x.to(self.device), targets.to(self.device)
                 self.optimizer.zero_grad()
-                # Supervised loss
+            
                 supervised_losses = [
                     self.supervised_criterion(self._forward(model, x), targets)
                     for model in self.models
@@ -371,7 +368,7 @@ class MeanTeacherTrainer:
                 supervised_loss = sum(supervised_losses)
                 supervised_losses_logged.append(
                     supervised_loss.detach().item() / len(self.models)
-                )  # type: ignore
+                )  
                 consistency_loss = None
                 if unsupervised_iterator is not None:
                     try:
@@ -407,7 +404,7 @@ class MeanTeacherTrainer:
                 loss = supervised_loss
                 if consistency_loss is not None:
                     loss = loss + effective_unsup_weight * consistency_loss
-                loss.backward()  # type: ignore
+                loss.backward()  
                 self.optimizer.step()
                 self._update_mean_teachers()
             self.scheduler.step()
@@ -417,7 +414,7 @@ class MeanTeacherTrainer:
             else:
                 consistency_losses_logged = 0.0
 
-            # collect per-epoch supervised loss for return
+            # collecting here supervised loss per-epoch
             results.append(supervised_losses_logged)
 
             summary_dict = {
