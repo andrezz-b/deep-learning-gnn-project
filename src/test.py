@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 
+from qm9 import QM9DataModule
 from utils import seed_everything
 
 
@@ -20,22 +21,29 @@ def main(cfg):
     seed_everything(cfg.seed, cfg.force_deterministic)
 
     # Instantiate DataModule
-    dm = hydra.utils.instantiate(cfg.dataset.init)
+    dm: QM9DataModule = hydra.utils.instantiate(cfg.dataset.init)
     
     # Instantiate Model
     model = hydra.utils.instantiate(cfg.model.init).to(device)
 
     # Load Model Weights
+    if cfg.model_path is None:
+        raise ValueError("cfg.model_path must be set to a checkpoint file path")
+
     if not os.path.exists(cfg.model_path):
         raise FileNotFoundError(f"Model file not found at {cfg.model_path}")
-    
+
     print(f"Loading model from {cfg.model_path}")
     state_dict = torch.load(cfg.model_path, map_location=device)
     model.load_state_dict(state_dict)
     model.eval()
 
     # Test Loop
-    test_loader = dm.test_dataloader()
+    # Choose dataloader: default uses validation loader; set `use_test: true` in config to use test loader
+    if hasattr(cfg, 'use_test') and cfg.use_test:
+        test_loader = dm.test_dataloader()
+    else:
+        test_loader = dm.val_dataloader()
     test_losses = []
     
     print("Starting testing...")

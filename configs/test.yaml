@@ -11,3 +11,4 @@ seed: 0
 device: unset
 force_deterministic: false
 model_path: null # Path to the model checkpoint (.pt file)
+use_test: false  # If true, use the test dataloader instead of validation
