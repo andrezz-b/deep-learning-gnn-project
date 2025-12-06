@@ -1,0 +1,15 @@
+defaults:
+  - _self_
+
+method: cps
+
+train:
+  total_epochs: 1000
+  validation_interval: 10
+
+init:
+  _target_: trainer.CPSTrainer
+  supervised_criterion:
+    _target_: torch.nn.MSELoss
+  optimizer: ${optimizer}
+  scheduler: ${scheduler}
