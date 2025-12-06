@@ -1,0 +1,38 @@
+# @package _global_
+
+defaults:
+  - override /model: gin
+  - override /optimizer: adamw
+  - override /scheduler: cosine
+  - override /trainer: graph-mixup
+
+logger:
+  name: gin_best_graph_mixup_1
+  group: ssl_graph_mixup
+
+model:
+  init:
+    dropout: 0.1
+    hidden_channels: 512
+    jk: cat
+    local_layers: 12
+    norm: graph
+    res: true
+
+optimizer:
+  lr: 0.0003
+  weight_decay: 0.0005
+
+trainer:
+  train:
+    total_epochs: 1000
+  init:
+    unsupervised_weight: 0.1
+    alpha: 0.1
+
+save_model: true
+
+# 1% of the training portion is labeled.
+dataset:
+  init:
+    splits: [0.792, 0.008, 0.1, 0.1]

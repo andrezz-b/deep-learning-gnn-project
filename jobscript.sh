@@ -3,7 +3,7 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J deep-learning-gnn-sweep
+#BSUB -J deep-learning-gnn-experiments
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 ### -- Select the resources: 1 gpu in exclusive process mode --
@@ -13,8 +13,6 @@
 # request 5GB of system-memory
 #BSUB -R "rusage[mem=4GB]"
 ### -- set the email address --
-# please uncomment the following line and put in your e-mail address,
-# if you want to receive e-mail notifications on a non-default address
 ##BSUB -u your_email_address
 ### -- send notification at start --
 ##BSUB -B
@@ -26,6 +24,26 @@
 #BSUB -e logs/job/gpu_%J.err
 # -- end of LSF options --
 
-source .venv/bin/activate
+# Activate virtualenv
+if [ -f .venv/bin/activate ]; then
+	# shellcheck disable=SC1091
+	. .venv/bin/activate
+fi
 
-wandb agent andrezzb-deep-learning-gnn/deep-learning-gnn/lw6fr951
+PYTHON=${PYTHON:-python}
+EXPDIR="configs/experiments"
+
+echo "Starting experiment run sequence..."
+
+# Then: run the three new semi-supervised experiments
+for name in gin_best_20 gin_best_5 gin_best_1; do
+	echo "Running experiment: $name"
+	$PYTHON src/run.py +experiments="$name"
+	status=$?
+	if [ $status -ne 0 ]; then
+		echo "Experiment $name failed with exit code $status" >&2
+		exit $status
+	fi
+done
+
+echo "All experiments completed."

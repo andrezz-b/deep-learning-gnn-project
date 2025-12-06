@@ -114,7 +114,9 @@ class GraphMixup:
         datamodule: QM9DataModule,
         unsupervised_weight: float = 1.0,  # Max weight for unsupervised loss
         alpha: float = 1.0,
-        k_perturbations: int = 10
+        k_perturbations: int = 10,
+        rampup_start_epoch: int = 500,  # Start ramping up w(t) here
+        rampup_end_epoch: int = 1000,   # Reach max w(t) here
     ):
         assert isinstance(models[0], GIN), "Only GIN is supported"
         self.device = device
@@ -122,19 +124,22 @@ class GraphMixup:
         self.supervised_criterion = supervised_criterion
         self.alpha = alpha
         self.k_perturbations = k_perturbations
+        
+        # Ramp-up Configuration
+        self.rampup_start_epoch = rampup_start_epoch
+        self.rampup_end_epoch = rampup_end_epoch
+        self.unsupervised_weight = unsupervised_weight
 
         all_params = [p for m in self.models for p in m.parameters()]
         self.optimizer = optimizer(params=all_params)
         self.scheduler = scheduler(optimizer=self.optimizer)
 
         self.train_dataloader = datamodule.train_dataloader()
-        # Use cycle to ensure we don't stop early if unlabeled data > labeled data
         self.unsupervised_train_dataloader = datamodule.unsupervised_train_dataloader()
 
         self.val_dataloader = datamodule.val_dataloader()
         self.test_dataloader = datamodule.test_dataloader()
         self.logger = logger
-        self.unsupervised_weight = unsupervised_weight
 
     def validate(self):
         for model in self.models:
@@ -155,21 +160,36 @@ class GraphMixup:
         val_loss = np.mean(val_losses)
         return {"val_MSE": val_loss}
 
-    def get_consistency_weight(self, epoch: int, total_epochs: int) -> float:
-        # First 50% of epochs: weight = 0. Last 50%: sigmoid-like ramp-up to self.unsupervised_weight.
-        rampup_start = total_epochs // 2
-        if epoch <= rampup_start:
+    def get_consistency_weight(self, epoch: int) -> float:
+        """
+        Calculates w(t) based on the current epoch and the configured ramp-up schedule.
+        Schedule: 0.0 -> ramp-up (sigmoid) -> max_weight
+        """
+        if epoch < self.rampup_start_epoch:
             return 0.0
-
-        rampup_length = total_epochs - rampup_start
-        if rampup_length <= 0:
+        
+        if epoch >= self.rampup_end_epoch:
             return self.unsupervised_weight
 
-        p = float(epoch - rampup_start) / float(rampup_length)  # in (0, 1]
+        # Normalize epoch to [0, 1] range relative to the ramp-up window
+        rampup_length = self.rampup_end_epoch - self.rampup_start_epoch
+        if rampup_length == 0: # Avoid division by zero
+            return self.unsupervised_weight
+            
+        p = (epoch - self.rampup_start_epoch) / rampup_length
         p = min(max(p, 0.0), 1.0)
+        
+        # Sigmoid-like ramp-up function (from Mean Teacher / GraphMix paper)
         return self.unsupervised_weight * np.exp(-5.0 * (1.0 - p) * (1.0 - p))
 
     def train(self, total_epochs: int, validation_interval: int):
+        # Assertion to ensure the ramp-up schedule makes sense for this run
+        if self.rampup_end_epoch > total_epochs:
+            print(f"Warning: Ramp-up end ({self.rampup_end_epoch}) is larger than total_epochs ({total_epochs}). "
+                  f"Unsupervised loss will never reach full weight.")
+        assert self.rampup_start_epoch < self.rampup_end_epoch, \
+            f"Ramp-up start ({self.rampup_start_epoch}) must be before end ({self.rampup_end_epoch})"
+
         results = []
 
         for epoch in (pbar := tqdm(range(1, total_epochs + 1))):
@@ -177,9 +197,9 @@ class GraphMixup:
                 model.train()
 
             epoch_loss_log = []
-
-            # w(t): Ramp-up weight for unsupervised loss
-            w_t = self.get_consistency_weight(epoch, total_epochs)
+            
+            # Calculate w(t) for this epoch
+            w_t = self.get_consistency_weight(epoch)
 
             for (x_label, targets_label), (x_unlabel, targets_unlabel) in zip(
                 self.train_dataloader, self.unsupervised_train_dataloader

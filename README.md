@@ -115,6 +115,91 @@ Where the files are stored locally (relative to the project root):
 
 And the same files will be attached to the WandB run as artifacts.
 
+## Group workflow: creating, running, and importing experiment checkpoints
+
+This section explains how your team should create an experiment, run it (locally or on a cluster), download the resulting model checkpoint from the Weights & Biases (W&B) UI, and place it into the `models/` folder so the provided evaluation tools can find it.
+
+1) Create an experiment
+
+- Add a YAML file to `configs/experiments/`. Example `configs/experiments/ablation_gnn/01_gcn_baseline.yaml`:
+
+```yaml
+# @package _global_
+
+defaults:
+  - override /model: gcn
+  - override /optimizer: adam
+  - override /scheduler: step
+
+model:
+  init:
+    hidden_channels: 128
+    dropout: 0.0
+
+trainer:
+  train:
+    total_epochs: 200
+
+save_model: true
+model_save_dir: saved_models
+```
+
+2) Run training (example)
+
+- Quick local run (does not save by default in the short example):
+
+```bash
+python src/run.py +experiments=ablation_gnn/01_gcn_baseline trainer.train.total_epochs=1 save_model=false
+```
+
+- Full run that saves the model locally (overrides `model_save_dir`):
+
+```bash
+python src/run.py +experiments=ablation_gnn/01_gcn_baseline trainer.train.total_epochs=200 save_model=true model_save_dir=./saved_models
+```
+
+3) Uploads to W&B
+
+- If `save_model: true` and W&B logging is enabled the saved `.pt` files will be attached to the run as artifacts automatically. You can verify the run and its artifacts in the W&B web UI: https://wandb.ai/
+
+4) Download checkpoint from W&B (Web UI)
+
+- In the W&B project page, open the run corresponding to your experiment.
+- Click the **Files** tab. You should see an artifact that contains the `.pt` file (under `saved_files`)
+- Download the `.pt` file to your local machine (it will typically land in `~/Downloads`).
+
+5) Place the checkpoint in `models/` with the correct path/name
+
+- The evaluation notebook and `src/test.py` expect checkpoints to be named according to the experiment config path. For example the experiment `ablation_gnn/01_gcn_baseline` should have the checkpoint at:
+
+```
+models/ablation_gnn/01_gcn_baseline.pt
+```
+
+- Example commands after downloading `model.pt` to `~/Downloads`:
+
+```bash
+mkdir -p models/ablation_gnn
+mv ~/Downloads/model.pt models/ablation_gnn/01_gcn_baseline.pt
+```
+
+6) Test the model locally (example)
+
+- Use the provided test script which expects the checkpoint to be a `state_dict` saved by our training code. Example:
+
+```bash
+python src/test.py +experiments=ablation_gnn/01_gcn_baseline model_path=models/ablation_gnn/01_gcn_baseline.pt
+```
+- Short train (no save):
+```bash
+python src/run.py +experiments=ablation_gnn/01_gcn_baseline trainer.train.total_epochs=1 save_model=false
+```
+
+- Test (expects file at `models/ablation_gnn/01_gcn_baseline.pt`):
+```bash
+python src/test.py +experiments=ablation_gnn/01_gcn_baseline model_path=models/ablation_gnn/01_gcn_baseline.pt
+```
+
 ## Improving the predictive accuracy
 There are many ways to improve the GNN. Please try to get the validation error (MSE) as low as possible. I have not implemented the code to run on the test data. That is for you to do, but please wait until you have the final model.
 Here are some great resources:
