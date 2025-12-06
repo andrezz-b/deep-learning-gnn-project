@@ -1,7 +1,11 @@
-from functools import partial
+from typing import Callable, cast
 
 import numpy as np
 import torch
+from torch.nn.modules.loss import MSELoss
+from torch.nn.modules.module import Module
+from torch.optim.lr_scheduler import LRScheduler
+from torch.optim.optimizer import Optimizer
 from tqdm import tqdm
 from pathlib import Path
 from hydra.utils import get_original_cwd
@@ -18,6 +22,10 @@ from torch.nn.modules.module import Module
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 from tqdm import tqdm
+
+from logger import WandBLogger
+from models import GIN
+from qm9 import QM9DataModule
 
 from logger import WandBLogger
 from models import GIN
@@ -306,12 +314,12 @@ class CPSTrainer:
 
         # Optim related things
         self.supervised_criterion = supervised_criterion
-        #all_params = [p for m in self.models for p in m.parameters()]        
+        #all_params = [p for m in self.models for p in m.parameters()]
         #self.optimizer = optimizer(params=all_params)
 
         #split optimizers and schedulers for each model CPS
         self.optimizers = [optimizer(params=m.parameters()) for m in self.models]
-        
+
         #self.scheduler = scheduler(optimizer=self.optimizer)
         self.schedulers = [scheduler(optimizer=opt) for opt in self.optimizers]
 
@@ -330,20 +338,20 @@ class CPSTrainer:
             model.eval()
 
         val_losses = []
-        
+
         with torch.no_grad():
             for x, targets in self.val_dataloader:
                 x, targets = x.to(self.device), targets.to(self.device)
-                
+
                 # eval only one model like in paper
-                
+
                 preds = self.models[0](x)
-                
+
                 val_loss = torch.nn.functional.mse_loss(preds, targets)
                 val_losses.append(val_loss.item())
         val_loss = np.mean(val_losses)
         return {"val_MSE": val_loss}
-    
+
     def CPS_loss(self, preds_one, preds_two):
         loss_one = torch.nn.functional.mse_loss(preds_one, preds_two.detach())
         loss_two = torch.nn.functional.mse_loss(preds_two, preds_one.detach())
@@ -377,10 +385,10 @@ class CPSTrainer:
                 predsu = [model(x_unlabeled) for model in self.models]
                 cps_unlabeled = self.CPS_loss(predsu[0], predsu[1])
                 cps_labeled = self.CPS_loss(preds_l[0], preds_l[1])
-                
+
                 total_loss = supervised_loss + self.lambda_cps*(cps_unlabeled + cps_labeled)
 
-                total_loss.backward() 
+                total_loss.backward()
 
                 # Step all optimizers
                 for opt in self.optimizers:
@@ -403,14 +411,14 @@ class CPSTrainer:
             for sch in self.schedulers:
                 sch.step()
 
-        
+
         #save model weights
         save_dir = Path(get_original_cwd()) / "models" /self.logger.run.id
         save_dir.mkdir(parents=True, exist_ok=True)
         for i, model in enumerate(self.models):
             torch.save(model.state_dict(), save_dir / f"model_{i}.pt")
             print(f"Saved model {i} weights to {save_dir / f'model_{i}.pt'}")
-            
+
         return results
 
 

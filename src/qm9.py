@@ -82,10 +82,10 @@ class QM9DataModule(pl.LightningDataModule):
 
         # Set batch sizes. We want the labeled batch size to be the one given by the user, and the unlabeled one to be so that we have the same number of batches
         self.batch_size_train_labeled = self.batch_size_train
-        self.batch_size_train_unlabeled = self.batch_size_train
-        #self.batch_size_train_unlabeled = int(
-        #    self.batch_size_train * len(self.data_train_unlabeled) / len(self.data_train_labeled)
-        #)
+        # self.batch_size_train_unlabeled = self.batch_size_train
+        self.batch_size_train_unlabeled = int(
+           self.batch_size_train * len(self.data_train_unlabeled) / len(self.data_train_labeled)
+        )
 
         print(f"QM9 dataset loaded with {len(self.data_train_labeled)} labeled, {len(self.data_train_unlabeled)} unlabeled, "
               f"{len(self.data_val)} validation, and {len(self.data_test)} test samples.")

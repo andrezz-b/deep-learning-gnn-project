@@ -1,0 +1,30 @@
+# @package _global_
+
+defaults:
+  - override /model: gin
+  - override /optimizer: adamw
+  - override /scheduler: cosine
+  - override /trainer: semi-supervised-ensemble
+
+logger:
+  name: 08_deep_gin
+  group: ablation_gnn
+
+model:
+  init:
+    local_layers: 12
+    hidden_channels: 512
+    dropout: 0.1
+    norm: graph
+    res: true
+    jk: cat
+
+optimizer:
+  lr: 0.0003
+  weight_decay: 0.0005
+
+trainer:
+  train:
+    total_epochs: 1000
+
+save_model: true

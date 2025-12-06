@@ -1,4 +1,6 @@
 
+from wandb.sdk.wandb_run import Run
+
 import wandb as wnb
 
 
@@ -41,7 +43,7 @@ class WandBLogger:
     def init_run(self, hparams):
         # self.name += "_seed=" + str(hparams['seed'])
         if not self.disable:
-            self.run = wnb.init(
+            self.run: Run = wnb.init(
                 name=self.name,
                 group=self.group,
                 config=hparams,
@@ -81,3 +83,7 @@ class WandBLogger:
     def end_run(self):
         if not self.disable:
             self.run.finish()
+
+    def save_artifact(self, path: str):
+        if not self.disable:
+            self.run.save(path)
