@@ -10,7 +10,7 @@ from utils import seed_everything
 
 @hydra.main(
     config_path="../configs/",
-    config_name="run.yaml",
+    config_name="run_cps.yaml",
     version_base=None,
 )
 def main(cfg):
