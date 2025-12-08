@@ -31,7 +31,7 @@ if [ -f .venv/bin/activate ]; then
 fi
 
 PYTHON=${PYTHON:-python}
-for name in cps/cps cps/cps_gin; do
+for name in cps/cps_gcn_1000 cps/cps_gin_250; do
     echo "Running CPS experiment: $name"
     $PYTHON src/run_cps.py +experiments="$name"
     status=$?
