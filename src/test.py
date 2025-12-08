@@ -52,7 +52,7 @@ def main(cfg):
             x, targets = x.to(device), targets.to(device)
             
             # Forward pass
-            preds = model(x)
+            preds = model(x, use_teacher=True)
             
             # Calculate loss (MSE)
             test_loss = torch.nn.functional.mse_loss(preds, targets)

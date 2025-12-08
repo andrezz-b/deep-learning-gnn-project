@@ -132,3 +132,5 @@ src/multirun/
 # Wandb sweep configs
 wandb/sweep-*
 hydralance/
+
+.idea
