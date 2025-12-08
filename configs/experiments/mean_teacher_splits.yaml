@@ -6,7 +6,7 @@ defaults:
 
 dataset:
   init:
-    splits: [0.792, 0.008, 0.10, 0.10] # 1% labeled
+    splits: [0.64, 0.16, 0.10, 0.10] # 20% labeled
 
 
 save_model: true
