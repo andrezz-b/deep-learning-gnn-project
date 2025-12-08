@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - override /model: mean_teacher_gcn
+  - override /trainer: mean-teacher-trainer
+  - override /optimizer: adamw
+  - override /scheduler: step
+
+trainer:
+  init:
+    unsupervised_loss_weight: 0.001
+
+save_model: true

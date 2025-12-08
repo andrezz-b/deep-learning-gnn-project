@@ -1,0 +1,22 @@
+# @package _global_
+
+defaults:
+  - override /trainer: mean-teacher-trainer
+  - override /model: mean_teacher_gcn
+  - override /optimizer: adamw
+  - override /scheduler: step
+
+model:
+  init:
+    student_model:
+      hidden_channels: 128
+      local_layers: 3
+      dropout: 0.3 
+
+trainer:
+  train:
+    total_epochs: 100          # matches configs/trainer/mean-teacher-trainer.yaml:6-8
+  init:
+    unsupervised_loss_weight: 0.001  # from configs/trainer/mean-teacher-trainer.yaml:10-20
+
+save_model: true

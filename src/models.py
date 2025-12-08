@@ -1,3 +1,5 @@
+from copy import deepcopy
+from typing import Any, Literal
 from typing import Literal
 
 import numpy as np
@@ -353,7 +355,7 @@ class GIN(torch.nn.Module):
         FCN Forward Pass with Manifold Mixup (Ignores Graph Structure)
         """
         x, batch = data.x, data.batch
-        
+
         # 1. Create Empty Edges (FCN View)
         # By passing empty edges, GINConv acts like a standard MLP on node features
         empty_edge_index = torch.empty((2, 0), dtype=torch.long, device=x.device)
@@ -392,7 +394,7 @@ class GIN(torch.nn.Module):
 
         # Mix Hidden States (Embeddings)
         x = lam * x + (1 - lam) * x[perm]
-        
+
         # Prepare Mixed Targets
         target_a = target
         target_b = target[perm]
@@ -401,3 +403,66 @@ class GIN(torch.nn.Module):
         x = self.linear(x)
 
         return x, target_a, target_b, lam
+
+
+class MeanTeacher(torch.nn.Module):
+    """
+    forward(..., use_teacher=False) for training if we want to use the student model as usual,
+    and use_teacher=True if we want the teacher's predictions
+    update_teacher()
+    """
+
+    def __init__(self, student_model: torch.nn.Module, ema_decay: float = 0.999, update_every: int = 1):
+        super().__init__()
+        self.student = student_model
+        self.teacher = deepcopy(student_model) # cloning the student model to teacher model
+        self.teacher.requires_grad_(False) # goes through all params and sets the grad flag to False
+        # we dont need to calculate and store gradients in teacher model, so autograd won't track operations on it
+
+        self.ema_decay = ema_decay #exponential moving average
+        '''
+        θ_teacher = ema_decay * θ_teacher + (1 - ema_decay) * θ_student,
+        so this param closer to 1.0 make the teacher change slowly,
+        while smaller values make it follow the student more
+        '''
+
+        self.update_every = update_every #skip teacher updates to save time, check out update_teacher
+
+        # here we attach a tensor to the module that isn’t a trainable parameter
+        self.register_buffer("_update_counter", torch.tensor(0, dtype=torch.long), persistent=False)
+
+    def forward(self, data: Any, use_teacher: bool = False) -> torch.Tensor:
+        '''
+        Decides which model to run (student/teacher) and in what autograd mode.
+
+        - we run student forward to get predictions that are part of the loss; gradients flow through this path.
+        - then the teacher forward (use_teacher=True) to produce targets (a vector with probabilities for each class).
+          (this forward is inside torch.no_grad(), so it stays out of autograd, but the resulting predictions
+          still enter the consistency loss computation)
+        - combining losses, doing backpropogation, and updating the student weights
+        - after we call model.update_teacher() so the teacher weights move toward the updated student weights
+        '''
+
+        if use_teacher:
+            self.teacher.eval() #sets model to evaluation mode, so regularization behaves accordingly
+            with torch.no_grad():
+                return self.teacher(data) # we get the EMA output (for consistency loss)
+        return self.student(data) # if use_teacher=False (default), we move to self.student(data), so training behaves like a normal model
+
+    @torch.no_grad() #tells autograd not to track any operations inside this function while it runs, just in case
+    def update_teacher(self) -> None:
+        self._update_counter += 1
+        if self._update_counter % self.update_every != 0:
+            return # when the check succeeds (!= 0) the return exits the function and the loop is skipped entirely
+
+        # if the counter is divisible (% = 0):
+        for teacher_param, student_param in zip(self.teacher.parameters(), self.student.parameters()): #teacher/student parameter pairs (same ordering thanks to deepcopy)
+            teacher_param.data.mul_(self.ema_decay)
+            teacher_param.data.add_((1.0 - self.ema_decay) * student_param.data)
+            # we have updated the teacher weights
+
+    @torch.no_grad()
+    def reset_teacher(self) -> None:
+        """Hard reset so the teacher and student share weights again."""
+        self.teacher.load_state_dict(self.student.state_dict())
+

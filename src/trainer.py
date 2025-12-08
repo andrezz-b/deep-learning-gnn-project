@@ -1,31 +1,16 @@
-from typing import Callable, cast
-
-import numpy as np
-import torch
-from torch.nn.modules.loss import MSELoss
-from torch.nn.modules.module import Module
-from torch.optim.lr_scheduler import LRScheduler
-from torch.optim.optimizer import Optimizer
-from tqdm import tqdm
-from pathlib import Path
-from hydra.utils import get_original_cwd
-import hydra
 from itertools import cycle
-
-
+from pathlib import Path
 from typing import Callable, cast
 
+import hydra
 import numpy as np
 import torch
+from hydra.utils import get_original_cwd
 from torch.nn.modules.loss import MSELoss
 from torch.nn.modules.module import Module
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 from tqdm import tqdm
-
-from logger import WandBLogger
-from models import GIN
-from qm9 import QM9DataModule
 
 from logger import WandBLogger
 from models import GIN
@@ -34,14 +19,14 @@ from qm9 import QM9DataModule
 
 class SemiSupervisedEnsemble:
     def __init__(
-            self,
-            supervised_criterion: torch.nn.MSELoss,
-            optimizer: Callable[..., torch.optim.Optimizer],
-            scheduler: Callable[..., torch.optim.lr_scheduler.LRScheduler],
-            device: torch.device,
-            models: list[torch.nn.Module],
-            logger: WandBLogger,
-            datamodule: QM9DataModule,
+        self,
+        supervised_criterion: torch.nn.MSELoss,
+        optimizer: Callable[..., torch.optim.Optimizer],
+        scheduler: Callable[..., torch.optim.lr_scheduler.LRScheduler],
+        device: torch.device,
+        models: list[torch.nn.Module],
+        logger: WandBLogger,
+        datamodule: QM9DataModule,
     ):
         self.device: torch.device = device
         self.models: list[Module] = models
@@ -120,19 +105,19 @@ class SemiSupervisedEnsemble:
 
 class GraphMixup:
     def __init__(
-            self,
-            supervised_criterion: torch.nn.MSELoss,
-            optimizer: Callable[..., torch.optim.Optimizer],
-            scheduler: Callable[..., torch.optim.lr_scheduler.LRScheduler],
-            device: torch.device,
-            models: list[torch.nn.Module],
-            logger: WandBLogger,
-            datamodule: QM9DataModule,
-            unsupervised_weight: float = 1.0,  # Max weight for unsupervised loss
-            alpha: float = 1.0,
-            k_perturbations: int = 10,
-            rampup_start_epoch: int = 500,  # Start ramping up w(t) here
-            rampup_end_epoch: int = 1000,   # Reach max w(t) here
+        self,
+        supervised_criterion: torch.nn.MSELoss,
+        optimizer: Callable[..., torch.optim.Optimizer],
+        scheduler: Callable[..., torch.optim.lr_scheduler.LRScheduler],
+        device: torch.device,
+        models: list[torch.nn.Module],
+        logger: WandBLogger,
+        datamodule: QM9DataModule,
+        unsupervised_weight: float = 1.0,  # Max weight for unsupervised loss
+        alpha: float = 1.0,
+        k_perturbations: int = 10,
+        rampup_start_epoch: int = 500,  # Start ramping up w(t) here
+        rampup_end_epoch: int = 1000,  # Reach max w(t) here
     ):
         assert isinstance(models[0], GIN), "Only GIN is supported"
         self.device = device
@@ -189,7 +174,7 @@ class GraphMixup:
 
         # Normalize epoch to [0, 1] range relative to the ramp-up window
         rampup_length = self.rampup_end_epoch - self.rampup_start_epoch
-        if rampup_length == 0: # Avoid division by zero
+        if rampup_length == 0:  # Avoid division by zero
             return self.unsupervised_weight
 
         p = (epoch - self.rampup_start_epoch) / rampup_length
@@ -201,10 +186,13 @@ class GraphMixup:
     def train(self, total_epochs: int, validation_interval: int):
         # Assertion to ensure the ramp-up schedule makes sense for this run
         if self.rampup_end_epoch > total_epochs:
-            print(f"Warning: Ramp-up end ({self.rampup_end_epoch}) is larger than total_epochs ({total_epochs}). "
-                  f"Unsupervised loss will never reach full weight.")
-        assert self.rampup_start_epoch < self.rampup_end_epoch, \
+            print(
+                f"Warning: Ramp-up end ({self.rampup_end_epoch}) is larger than total_epochs ({total_epochs}). "
+                f"Unsupervised loss will never reach full weight."
+            )
+        assert self.rampup_start_epoch < self.rampup_end_epoch, (
             f"Ramp-up start ({self.rampup_start_epoch}) must be before end ({self.rampup_end_epoch})"
+        )
 
         results = []
 
@@ -218,10 +206,16 @@ class GraphMixup:
             w_t = self.get_consistency_weight(epoch)
 
             for (x_label, targets_label), (x_unlabel, targets_unlabel) in zip(
-                    self.train_dataloader, self.unsupervised_train_dataloader
+                self.train_dataloader, self.unsupervised_train_dataloader
             ):
-                x_label, targets_label = x_label.to(self.device), targets_label.to(self.device)
-                x_unlabel, targets_unlabel = x_unlabel.to(self.device), targets_unlabel.to(self.device)
+                x_label, targets_label = (
+                    x_label.to(self.device),
+                    targets_label.to(self.device),
+                )
+                x_unlabel, targets_unlabel = (
+                    x_unlabel.to(self.device),
+                    targets_unlabel.to(self.device),
+                )
 
                 self.optimizer.zero_grad()
                 model = cast(GIN, self.models[0])
@@ -237,7 +231,7 @@ class GraphMixup:
                     # We perform K forward passes with dropout enabled (model.train())
                     # to create "noisy" predictions, then average them.
                     with torch.no_grad():
-                        model.train() # Ensure dropout is active for perturbations
+                        model.train()  # Ensure dropout is active for perturbations
                         perturb_preds = []
                         for _ in range(self.k_perturbations):
                             perturb_preds.append(model(x_unlabel))
@@ -257,7 +251,7 @@ class GraphMixup:
 
                     # Mixup Loss calculation: lam * Loss(pred, y_a) + (1-lam) * Loss(pred, y_b)
                     loss_fcn_sup = lam * self.supervised_criterion(pred_sup, y_a) + (
-                            1 - lam
+                        1 - lam
                     ) * self.supervised_criterion(pred_sup, y_b)
 
                     # --- 4. FCN Forward Pass (Unsupervised Mixup) ---
@@ -293,6 +287,192 @@ class GraphMixup:
 
         return results
 
+
+class MeanTeacherTrainer:
+    def __init__(
+        self,
+        supervised_criterion,
+        optimizer,
+        scheduler,
+        device,
+        models,
+        logger,
+        datamodule,
+        unsupervised_loss_weight: float = 0.0,
+        early_stopping: dict | None = None,
+    ):
+        self.device = device
+        self.models = models
+
+        # Optimization related things
+        self.supervised_criterion = supervised_criterion
+        all_params = [
+            p for m in self.models for p in m.parameters() if p.requires_grad
+        ]  # only student params get optimized
+        self.optimizer = optimizer(params=all_params)
+        self.scheduler = scheduler(optimizer=self.optimizer)
+
+        # Dataloader setup
+        self.train_dataloader = datamodule.train_dataloader()
+        self.val_dataloader = datamodule.val_dataloader()
+        self.test_dataloader = datamodule.test_dataloader()
+        self.unsupervised_train_dataloader = None
+        if hasattr(datamodule, "unsupervised_train_dataloader"):
+            self.unsupervised_train_dataloader = (
+                datamodule.unsupervised_train_dataloader()
+            )
+
+        # Logging
+        self.logger = logger
+        self.unsupervised_loss_weight = unsupervised_loss_weight
+        self.early_stopping_cfg = early_stopping or {}
+        self.early_stopping_monitor = self.early_stopping_cfg.get("monitor", "val_MSE")
+        self.early_stopping_patience = self.early_stopping_cfg.get("patience", 0)
+        self.early_stopping_min_delta = self.early_stopping_cfg.get("min_delta", 0.0)
+
+    def _forward(self, model, batch, prefer_teacher: bool = False):
+        if prefer_teacher:
+            use_teacher = (
+                getattr(model, "teacher", None) is not None
+            )  # checking if the model has an attribute called "teacher"
+            if use_teacher:
+                try:
+                    return model(batch, use_teacher=True)
+                except TypeError:
+                    pass
+        return model(batch)
+
+    def _update_mean_teachers(self):
+        for model in self.models:
+            update_teacher = getattr(model, "update_teacher", None)
+            if callable(update_teacher):
+                update_teacher()
+
+    def validate(self):
+        for model in self.models:
+            model.eval()
+
+        val_losses = []
+
+        with torch.no_grad():
+            for x, targets in self.val_dataloader:
+                x, targets = x.to(self.device), targets.to(self.device)
+
+                # ensemble prediction, averaging across models
+                preds = [
+                    self._forward(model, x, prefer_teacher=True)
+                    for model in self.models
+                ]
+                avg_preds = torch.stack(preds).mean(0)
+
+                val_loss = torch.nn.functional.mse_loss(avg_preds, targets)
+                val_losses.append(val_loss.item())
+        val_loss = np.mean(val_losses)
+        return {"val_MSE": val_loss}
+
+    def train(self, total_epochs, validation_interval):
+        results = []
+        best_metric = float("inf")
+        epochs_since_improvement = 0
+
+        for epoch in (pbar := tqdm(range(1, total_epochs + 1))):
+            effective_unsup_weight = self.unsupervised_loss_weight
+            for model in self.models:
+                model.train()
+            supervised_losses_logged = []
+            consistency_losses_logged = []
+            unsupervised_iterator = None
+            if (
+                self.unsupervised_train_dataloader is not None
+                and self.unsupervised_loss_weight > 0
+            ):
+                unsupervised_iterator = iter(self.unsupervised_train_dataloader)
+            for x, targets in self.train_dataloader:
+                x, targets = x.to(self.device), targets.to(self.device)
+                self.optimizer.zero_grad()
+
+                supervised_losses = [
+                    self.supervised_criterion(self._forward(model, x), targets)
+                    for model in self.models
+                ]
+                supervised_loss = sum(supervised_losses)
+                supervised_losses_logged.append(
+                    supervised_loss.detach().item() / len(self.models)
+                )
+                consistency_loss = None
+                if unsupervised_iterator is not None:
+                    try:
+                        unsup_batch = next(unsupervised_iterator)
+                    except StopIteration:
+                        unsupervised_iterator = iter(self.unsupervised_train_dataloader)
+                        unsup_batch = next(unsupervised_iterator)
+
+                    unsup_data, _ = unsup_batch
+                    unsup_data = unsup_data.to(self.device)
+                    consistency_terms = []
+                    for model in self.models:
+                        if not hasattr(model, "teacher"):
+                            continue
+                        try:
+                            teacher_preds = model(unsup_data, use_teacher=True)
+                        except TypeError:
+                            continue
+                        student_preds = model(unsup_data)
+                        consistency_terms.append(
+                            torch.nn.functional.mse_loss(
+                                student_preds, teacher_preds.detach()
+                            )
+                        )
+                    if consistency_terms:
+                        consistency_loss = sum(consistency_terms) / len(
+                            consistency_terms
+                        )
+                        consistency_losses_logged.append(
+                            consistency_loss.detach().item()
+                        )
+
+                loss = supervised_loss
+                if consistency_loss is not None:
+                    loss = loss + effective_unsup_weight * consistency_loss
+                loss.backward()
+                self.optimizer.step()
+                self._update_mean_teachers()
+            self.scheduler.step()
+            supervised_losses_logged = np.mean(supervised_losses_logged)
+            if consistency_losses_logged:
+                consistency_losses_logged = np.mean(consistency_losses_logged)
+            else:
+                consistency_losses_logged = 0.0
+
+            # collecting here supervised loss per-epoch
+            results.append(supervised_losses_logged)
+
+            summary_dict = {
+                "supervised_loss": supervised_losses_logged,
+            }
+            if self.unsupervised_loss_weight > 0:
+                summary_dict["consistency_loss"] = consistency_losses_logged
+                summary_dict["unsup_weight"] = effective_unsup_weight
+            stop_training = False
+            if epoch % validation_interval == 0 or epoch == total_epochs:
+                val_metrics = self.validate()
+                summary_dict.update(val_metrics)
+                metric = val_metrics.get(self.early_stopping_monitor)
+                if metric is not None:
+                    if metric + self.early_stopping_min_delta < best_metric:
+                        best_metric = metric
+                        epochs_since_improvement = 0
+                    else:
+                        epochs_since_improvement += 1
+                        if 0 < self.early_stopping_patience <= epochs_since_improvement:
+                            stop_training = True
+                pbar.set_postfix(summary_dict)
+            self.logger.log_dict(summary_dict, step=epoch)
+            if stop_training:
+                break
+        return results
+
+
 class CPSTrainer:
     def __init__(
         self,
@@ -310,17 +490,15 @@ class CPSTrainer:
         self.lambda_cps = lambda_cps
         self.models = [m.to(self.device) for m in self.models]
 
-
-
         # Optim related things
         self.supervised_criterion = supervised_criterion
-        #all_params = [p for m in self.models for p in m.parameters()]
-        #self.optimizer = optimizer(params=all_params)
+        # all_params = [p for m in self.models for p in m.parameters()]
+        # self.optimizer = optimizer(params=all_params)
 
-        #split optimizers and schedulers for each model CPS
+        # split optimizers and schedulers for each model CPS
         self.optimizers = [optimizer(params=m.parameters()) for m in self.models]
 
-        #self.scheduler = scheduler(optimizer=self.optimizer)
+        # self.scheduler = scheduler(optimizer=self.optimizer)
         self.schedulers = [scheduler(optimizer=opt) for opt in self.optimizers]
 
         # Dataloader setup
@@ -355,19 +533,20 @@ class CPSTrainer:
     def CPS_loss(self, preds_one, preds_two):
         loss_one = torch.nn.functional.mse_loss(preds_one, preds_two.detach())
         loss_two = torch.nn.functional.mse_loss(preds_two, preds_one.detach())
-        return (loss_one + loss_two)
-
+        return loss_one + loss_two
 
     def train(self, total_epochs, validation_interval):
-        #self.logger.log_dict()
+        # self.logger.log_dict()
         results = []
         for epoch in (pbar := tqdm(range(1, total_epochs + 1))):
             for model in self.models:
                 model.train()
             supervised_losses_logged = []
-            #training loop rewamped for CPS
+            # training loop rewamped for CPS
 
-            for (x_labeled, targets), (x_unlabeled, _) in zip(self.train_dataloader, self.unlabeled_dataloader):
+            for (x_labeled, targets), (x_unlabeled, _) in zip(
+                self.train_dataloader, self.unlabeled_dataloader
+            ):
                 x_labeled, targets = x_labeled.to(self.device), targets.to(self.device)
                 x_unlabeled = x_unlabeled.to(self.device)
 
@@ -380,13 +559,17 @@ class CPSTrainer:
                 supervised_losses = [self.mse_loss(p, targets) for p in preds_l]
 
                 supervised_loss = sum(supervised_losses)
-                supervised_losses_logged.append(supervised_loss.detach().item() / len(self.models))
+                supervised_losses_logged.append(
+                    supervised_loss.detach().item() / len(self.models)
+                )
                 # Semi-supervised CPS loss
                 predsu = [model(x_unlabeled) for model in self.models]
                 cps_unlabeled = self.CPS_loss(predsu[0], predsu[1])
                 cps_labeled = self.CPS_loss(preds_l[0], preds_l[1])
 
-                total_loss = supervised_loss + self.lambda_cps*(cps_unlabeled + cps_labeled)
+                total_loss = supervised_loss + self.lambda_cps * (
+                    cps_unlabeled + cps_labeled
+                )
 
                 total_loss.backward()
 
@@ -411,14 +594,11 @@ class CPSTrainer:
             for sch in self.schedulers:
                 sch.step()
 
-
-        #save model weights
-        save_dir = Path(get_original_cwd()) / "models" /self.logger.run.id
+        # save model weights
+        save_dir = Path(get_original_cwd()) / "models" / self.logger.run.id
         save_dir.mkdir(parents=True, exist_ok=True)
         for i, model in enumerate(self.models):
             torch.save(model.state_dict(), save_dir / f"model_{i}.pt")
             print(f"Saved model {i} weights to {save_dir / f'model_{i}.pt'}")
 
         return results
-
-

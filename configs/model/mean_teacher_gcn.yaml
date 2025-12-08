@@ -1,0 +1,18 @@
+defaults:
+  - _self_
+
+name: mean_teacher_gcn
+
+init:
+  _target_: models.MeanTeacher
+  ema_decay: 0.995
+  update_every: 1
+  student_model:
+    _target_: models.GCN
+    _partial_: false
+    res: true
+    num_node_features: 11
+    local_layers: 3          # or 5 if you know it worked well
+    hidden_channels: 128     # go back to the smaller one first
+    dropout: 0.3
+    norm: batch

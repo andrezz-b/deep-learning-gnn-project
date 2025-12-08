@@ -1,0 +1,33 @@
+defaults:
+  - _self_
+
+method: mean-teacher-trainer
+
+train:
+  total_epochs: 100
+  validation_interval: 10
+
+init:
+  _target_: trainer.MeanTeacherTrainer 
+  supervised_criterion:
+    _target_: torch.nn.MSELoss
+  # optimizer: ${optimizer}
+  # scheduler: ${scheduler}
+  unsupervised_loss_weight: 0.001
+  early_stopping:
+    monitor: val_MSE
+    patience: 20
+    min_delta: 0.0
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 0.001
+    weight_decay: 0.005
+  scheduler:
+    _target_: torch.optim.lr_scheduler.StepLR
+    _partial_: true
+    step_size: 1
+    gamma: 0.975 
+
+
