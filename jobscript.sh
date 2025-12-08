@@ -31,19 +31,14 @@ if [ -f .venv/bin/activate ]; then
 fi
 
 PYTHON=${PYTHON:-python}
-EXPDIR="configs/experiments"
-
-echo "Starting experiment run sequence..."
-
-# Then: run the three new semi-supervised experiments
-for name in gin_best_20 gin_best_5 gin_best_1; do
-	echo "Running experiment: $name"
-	$PYTHON src/run.py +experiments="$name"
-	status=$?
-	if [ $status -ne 0 ]; then
-		echo "Experiment $name failed with exit code $status" >&2
-		exit $status
-	fi
+for name in cps/cps cps/cps_gin; do
+    echo "Running CPS experiment: $name"
+    $PYTHON src/run_cps.py +experiments="$name"
+    status=$?
+    if [ $status -ne 0 ]; then
+        echo "Experiment $name failed with exit code $status" >&2
+        exit $status
+    fi
 done
 
-echo "All experiments completed."
+echo "All CPS experiments completed."

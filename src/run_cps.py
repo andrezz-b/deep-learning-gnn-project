@@ -1,4 +1,5 @@
 
+import os
 from itertools import chain
 
 import hydra
@@ -42,6 +43,18 @@ def main(cfg):
 
     results = trainer.train(**cfg.trainer.train)
     results = torch.Tensor(results)
+
+    if cfg.save_model:
+        save_dir = cfg.model_save_dir
+        if not os.path.isabs(save_dir):
+            save_dir = os.path.join(hydra.utils.get_original_cwd(), save_dir)
+        os.makedirs(save_dir, exist_ok=True)
+
+        # Save the first model (model_one) as model_0.pt for consistency
+        save_path = os.path.join(save_dir, "model_0.pt")
+        torch.save(models[0].state_dict(), save_path)
+        if hasattr(logger, "save_artifact"):
+            logger.save_artifact(save_path)
 
 
 

@@ -1,0 +1,17 @@
+# @package _global_
+
+defaults:
+  - override /model: gin
+  - override /trainer: cps
+  - override /optimizer: adamw
+  - override /scheduler: cosine
+
+trainer:
+  train:
+    total_epochs: 250
+
+cps:
+  enabled: true
+  lambda_cps: 1.5
+
+save_model: true

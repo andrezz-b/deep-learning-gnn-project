@@ -1,0 +1,21 @@
+# @package _global_
+
+defaults:
+  - override /model: gcn
+  - override /trainer: cps
+  - override /optimizer: adamw
+  - override /scheduler: cosine
+
+model:
+  init:
+    hidden_channels: 128
+
+trainer:
+  train:
+    total_epochs: 1000
+
+cps:
+  enabled: true
+  lambda_cps: 1.5
+
+save_model: true
