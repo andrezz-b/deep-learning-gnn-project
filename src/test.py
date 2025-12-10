@@ -52,7 +52,10 @@ def main(cfg):
             x, targets = x.to(device), targets.to(device)
             
             # Forward pass
-            preds = model(x, use_teacher=True)
+            if cfg.trainer.method == "mean-teacher-trainer":
+                preds = model(x, use_teacher=True)
+            else:
+                preds = model(x)
             
             # Calculate loss (MSE)
             test_loss = torch.nn.functional.mse_loss(preds, targets)
